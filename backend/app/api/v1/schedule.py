@@ -1,26 +1,22 @@
 """Funcionamento da barbearia: horários, bloqueios, configurações e disponibilidade."""
-from datetime import date, datetime, time, timedelta, timezone
-from zoneinfo import ZoneInfo
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin
-from app.core.config import settings as app_settings
 from app.db.session import get_db
-from app.models import AdminUser, Appointment, BlockedTime, BusinessHours, Service
-from app.models.appointment import ACTIVE_STATUSES
+from app.models import AdminUser, BlockedTime, BusinessHours, Service
 from app.schemas.schedule import (
     AvailabilityOut, BlockedTimeCreate, BlockedTimeOut, BusinessHoursItem,
     BusinessHoursUpdate, SettingsOut, SettingsUpdate,
 )
 from app.services import audit
-from app.services.availability import compute_slots
+from app.services.availability import slots_for_day
 from app.services.shop_settings import get_settings
 
 router = APIRouter(tags=["schedule"])
-TZ = ZoneInfo(app_settings.shop_timezone)
 
 
 # ---------- Configurações ----------
@@ -101,19 +97,6 @@ def availability(date_: date = Query(alias="date"), service_id: int = Query(), d
     if service is None or not service.is_active:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Serviço não encontrado")
 
-    hours = [(h.start_time, h.end_time) for h in
-             db.scalars(select(BusinessHours).where(BusinessHours.weekday == date_.weekday()))]
-    day_start = datetime.combine(date_, time.min, tzinfo=TZ)
-    day_end = day_start + timedelta(days=1)
-
-    blocks = db.execute(select(BlockedTime.starts_at, BlockedTime.ends_at)
-                        .where(BlockedTime.starts_at < day_end, BlockedTime.ends_at > day_start)).all()
-    appts = db.execute(select(Appointment.starts_at, Appointment.ends_at)
-                       .where(Appointment.status.in_(ACTIVE_STATUSES),
-                              Appointment.starts_at < day_end, Appointment.ends_at > day_start)).all()
-    busy = [(s, e) for s, e in [*blocks, *appts]]
-
-    slots = compute_slots(date_, service.duration_minutes, hours, get_settings(db).slot_interval_minutes,
-                          busy, TZ, datetime.now(timezone.utc))
+    slots = slots_for_day(db, date_, service)
     return AvailabilityOut(date=date_.isoformat(), service_id=service.id,
                            duration_minutes=service.duration_minutes, slots=slots)

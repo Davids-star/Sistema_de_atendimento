@@ -1,9 +1,12 @@
 from fastapi import APIRouter, FastAPI
 
 from app.api import health
-from app.api.v1 import auth, clients, schedule, services
+from app.api.v1 import appointments, auth, clients, schedule, services
+from fastapi.responses import JSONResponse
+
 from app.core.logging import setup_logging
 from app.core.middleware import request_logging
+from app.services.appointments import AppointmentError
 
 setup_logging()
 
@@ -16,4 +19,10 @@ api_v1.include_router(auth.router)
 api_v1.include_router(services.router)
 api_v1.include_router(clients.router)
 api_v1.include_router(schedule.router)
+api_v1.include_router(appointments.router)
 app.include_router(api_v1)
+
+
+@app.exception_handler(AppointmentError)
+def appointment_error_handler(_, exc: AppointmentError):
+    return JSONResponse({"detail": exc.message}, status_code=exc.status_code)
