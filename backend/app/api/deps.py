@@ -3,7 +3,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.core.security import decode_access_token
+from app.core.security import decode_token_claims, password_version
 from app.db.session import get_db
 from app.models import AdminUser
 
@@ -16,9 +16,10 @@ def get_optional_admin(
 ) -> AdminUser | None:
     if creds is None:
         return None
-    admin_id = decode_access_token(creds.credentials)
-    admin = db.get(AdminUser, admin_id) if admin_id else None
-    if admin is None or not admin.is_active:
+    claims = decode_token_claims(creds.credentials)
+    admin = db.get(AdminUser, claims[0]) if claims else None
+    # Token de antes da última troca de senha não vale mais.
+    if admin is None or not admin.is_active or claims[1] != password_version(admin):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token inválido ou expirado",
                             headers={"WWW-Authenticate": "Bearer"})
     return admin

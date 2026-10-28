@@ -1,8 +1,8 @@
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api', () => ({ api: vi.fn() }))
-import { api } from '../api'
+vi.mock('../api', () => ({ api: vi.fn(), setToken: vi.fn() }))
+import { api, setToken } from '../api'
 import { bodyText, clickButton, mountView, typeInto } from '../test-helpers'
 import ClientsView from './ClientsView.vue'
 import ServicesView from './ServicesView.vue'
@@ -145,5 +145,57 @@ describe('SettingsView', () => {
     await mountView(SettingsView)
     await clickButton('Salvar horários')
     expect(calls('PUT', '/business-hours')[0][1].body).toEqual({ items: [{ weekday: 0, start_time: '09:00', end_time: '12:00' }] })
+  })
+
+  describe('alterar senha', () => {
+    const open = async (me = { has_password: true }) => {
+      api.mockImplementation(async (path, o = {}) => {
+        if (path === '/auth/me') return me
+        if (path === '/auth/change-password') return { access_token: 'token-novo' }
+        if (path === '/settings') return { slot_interval_minutes: 30 }
+        if (path === '/business-hours' || path === '/blocked-times') return []
+        return {}
+      })
+      await mountView(SettingsView)
+    }
+    const inputs = () => [...document.querySelectorAll('.pw-form input')]
+    const submit = () => [...document.querySelectorAll('.pw-form button')].find((b) => /senha/i.test(b.textContent))
+
+    it('envia senha atual e nova, e guarda o token novo', async () => {
+      await open()
+      const [cur, nw, conf] = inputs()
+      await typeInto(cur, 'senha-antiga-123'); await typeInto(nw, 'senha-nova-forte-1'); await typeInto(conf, 'senha-nova-forte-1')
+      expect(submit().disabled).toBe(false)
+      submit().click(); await flushPromises()
+      expect(calls('POST', '/auth/change-password')[0][1].body).toEqual({ current_password: 'senha-antiga-123', new_password: 'senha-nova-forte-1' })
+      expect(setToken).toHaveBeenCalledWith('token-novo')
+    })
+
+    it('não deixa enviar com senha curta ou confirmação diferente', async () => {
+      await open()
+      const [cur, nw, conf] = inputs()
+      await typeInto(cur, 'senha-antiga-123'); await typeInto(nw, 'curta'); await typeInto(conf, 'curta')
+      expect(submit().disabled).toBe(true)
+      await typeInto(nw, 'senha-nova-forte-1')
+      expect(submit().disabled).toBe(true)      // confirmação ainda é "curta"
+      expect(bodyText()).toContain('As senhas não conferem')
+    })
+
+    it('exige a senha atual quando o admin já tem senha', async () => {
+      await open()
+      const [, nw, conf] = inputs()
+      await typeInto(nw, 'senha-nova-forte-1'); await typeInto(conf, 'senha-nova-forte-1')
+      expect(submit().disabled).toBe(true)
+    })
+
+    it('admin só-Google não precisa de senha atual e vê "Criar senha"', async () => {
+      await open({ has_password: false })
+      expect(inputs()).toHaveLength(2)
+      expect(bodyText()).toContain('Criar senha')
+      const [nw, conf] = inputs()
+      await typeInto(nw, 'senha-nova-forte-1'); await typeInto(conf, 'senha-nova-forte-1')
+      submit().click(); await flushPromises()
+      expect(calls('POST', '/auth/change-password')[0][1].body).toEqual({ current_password: null, new_password: 'senha-nova-forte-1' })
+    })
   })
 })

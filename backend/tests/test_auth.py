@@ -7,7 +7,8 @@ def test_login_ok_and_me(client, admin, auth):
     r = client.get("/api/v1/auth/me", headers=auth)
     assert r.status_code == 200
     assert r.json()["email"] == ADMIN_EMAIL
-    assert "password" not in r.text
+    assert "password_hash" not in r.text and "argon2" not in r.text   # nunca vaza o hash
+    assert r.json()["has_password"] is True
 
 
 def test_login_wrong_password(client, admin):

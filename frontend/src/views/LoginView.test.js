@@ -12,6 +12,7 @@ import LoginView from './LoginView.vue'
 const router = () => createRouter({ history: createMemoryHistory(), routes: [
   { path: '/login', name: 'login', component: { template: '<i/>' } },
   { path: '/', name: 'dashboard', component: { template: '<i/>' } },
+  { path: '/esqueci-senha', name: 'forgot', component: { template: '<i/>' } },
 ] })
 const mountLogin = (r = router()) => mountView(LoginView, {}, [r])
 const configWith = (id) => api.mockImplementation(async (path) => (path === '/auth/config' ? { google_client_id: id } : {}))
@@ -71,6 +72,13 @@ describe('LoginView com Google', () => {
 })
 
 describe('LoginView com senha', () => {
+  it('tem o link "Esqueci minha senha"', async () => {
+    configWith(null)
+    await mountLogin()
+    expect(bodyText()).toContain('Esqueci minha senha')
+    expect(document.querySelector('a[href="/esqueci-senha"]')).not.toBeNull()
+  })
+
   it('senha errada mostra mensagem amigável', async () => {
     api.mockImplementation(async (path) => {
       if (path === '/auth/config') return { google_client_id: null }

@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { api } from '../api'
+import { api, setToken } from '../api'
 import { flattenDays, groupByWeekday, validateIntervals, WEEKDAYS } from '../utils/hours'
 import { formatDateTime, isoToLocalInput, localInputToISO } from '../utils/datetime'
 import { notify, notifyError } from '../utils/notify'
+import { passwordError } from '../utils/password'
 
 // ---------- intervalo dos horários ----------
 const interval = ref(30)
@@ -75,7 +76,29 @@ async function removeBlock(b) {
   catch (e) { notifyError(e) }
 }
 
+// ---------- minha conta: alterar senha ----------
+const hasPassword = ref(true)   // admin que só entra com Google ainda não tem senha: não precisa informar a atual
+const pw = ref({ current: '', next: '', confirm: '' })
+const showPw = ref(false)
+const pwSaving = ref(false)
+const pwProblem = computed(() => passwordError(pw.value.next, pw.value.confirm))
+const pwOk = computed(() => !pwProblem.value && (!hasPassword.value || !!pw.value.current))
+
+async function changePassword() {
+  pwSaving.value = true
+  try {
+    const r = await api('/auth/change-password', { method: 'POST', body: {
+      current_password: hasPassword.value ? pw.value.current : null, new_password: pw.value.next } })
+    setToken(r.access_token)   // a troca encerra as sessões antigas; este token novo mantém você logado
+    hasPassword.value = true
+    pw.value = { current: '', next: '', confirm: '' }
+    notify('Senha alterada. Outros dispositivos conectados foram desconectados.')
+  } catch (e) { notifyError(e) }
+  finally { pwSaving.value = false }
+}
+
 onMounted(async () => {
+  api('/auth/me').then((me) => { hasPassword.value = me?.has_password !== false }).catch(() => {})
   try {
     const [s, hours] = await Promise.all([api('/settings'), api('/business-hours')])
     interval.value = s.slot_interval_minutes
@@ -88,7 +111,7 @@ onMounted(async () => {
 <template>
   <div class="mb-6"><div class="eyebrow mb-1">Funcionamento</div><h1 class="page-title">Configurações</h1></div>
 
-  <v-card class="pa-4 mb-4">
+  <v-card class="pa-5 mb-4">
     <div class="section-title">Intervalo entre horários</div>
     <p class="text-body-medium text-medium-emphasis mb-3">
       De quanto em quanto tempo começam os horários oferecidos ao cliente (ex.: 30 min → 9:00, 9:30, 10:00…).
@@ -103,7 +126,7 @@ onMounted(async () => {
     </div>
   </v-card>
 
-  <v-card class="pa-4 mb-4">
+  <v-card class="pa-5 mb-4">
     <div class="section-title">Horário de funcionamento</div>
     <p class="text-body-medium text-medium-emphasis mb-3">
       Um dia sem horário fica fechado. Use mais de um intervalo para marcar uma pausa (ex.: 9h–12h e 14h–18h).
@@ -127,7 +150,7 @@ onMounted(async () => {
     </div>
   </v-card>
 
-  <v-card class="pa-4">
+  <v-card class="pa-5">
     <div class="section-title">Bloqueios</div>
     <p class="text-body-medium text-medium-emphasis mb-3">
       Períodos em que não se atende (folga, médico, feriado). Não aparecem como disponíveis para o cliente.
@@ -148,9 +171,26 @@ onMounted(async () => {
     </v-list>
     <div v-else class="mt-4 text-medium-emphasis">Nenhum bloqueio futuro.</div>
   </v-card>
+
+  <v-card class="pa-5 mt-5">
+    <div class="section-title">Minha conta · Alterar senha</div>
+    <p class="text-body-medium text-medium-emphasis mb-3">
+      <template v-if="hasPassword">Informe a senha atual e escolha uma nova (mínimo de 10 caracteres). Os outros dispositivos conectados serão desconectados.</template>
+      <template v-else>Você entra com o Google e ainda não tem senha. Crie uma se quiser também poder entrar com e-mail e senha.</template>
+    </p>
+    <v-form class="pw-form" @submit.prevent="changePassword">
+      <v-text-field v-if="hasPassword" v-model="pw.current" label="Senha atual" :type="showPw ? 'text' : 'password'" autocomplete="current-password" />
+      <v-text-field v-model="pw.next" label="Nova senha" :type="showPw ? 'text' : 'password'" autocomplete="new-password"
+                    :append-inner-icon="showPw ? 'mdi-eye-off-outline' : 'mdi-eye-outline'" @click:append-inner="showPw = !showPw" />
+      <v-text-field v-model="pw.confirm" label="Repita a nova senha" :type="showPw ? 'text' : 'password'" autocomplete="new-password"
+                    :error-messages="pw.confirm && pwProblem ? pwProblem : ''" />
+      <v-btn type="submit" color="primary" :loading="pwSaving" :disabled="!pwOk">{{ hasPassword ? 'Alterar senha' : 'Criar senha' }}</v-btn>
+    </v-form>
+  </v-card>
 </template>
 
 <style scoped>
+.pw-form { max-width: 420px; }
 .v-list-item :deep(.v-list-item-title) { white-space: normal; }
 .day-row { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
 .day-name { width: 120px; padding-top: 8px; font-weight: 500; flex-shrink: 0; }

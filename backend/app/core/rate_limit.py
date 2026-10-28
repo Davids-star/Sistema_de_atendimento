@@ -46,3 +46,5 @@ class SlidingWindow:
 # Um limitador para o tráfego geral e outro só para falhas de login.
 general = SlidingWindow()
 login_failures = SlidingWindow()
+# Pedidos de redefinição de senha (para ninguém usar o sistema para encher a caixa de e-mail de alguém).
+reset_requests = SlidingWindow()

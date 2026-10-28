@@ -24,6 +24,7 @@ def reset_rate_limits():
     """Contadores são globais em memória: zera antes de cada teste para um não afetar o outro."""
     rate_limit.general.clear()
     rate_limit.login_failures.clear()
+    rate_limit.reset_requests.clear()
 
 
 @pytest.fixture

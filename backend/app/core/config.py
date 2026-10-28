@@ -14,6 +14,15 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     log_level: str = "INFO"
     google_client_id: str = ""   # vazio = login com Google desligado
+    # Redefinição de senha por e-mail
+    frontend_url: str = "http://localhost:5173"   # usado para montar o link enviado por e-mail
+    reset_token_minutes: int = 30
+    mail_mode: str = "off"        # off = não envia | console = imprime no terminal (só para testes) | smtp = envia de verdade
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
     shop_timezone: str = "America/Sao_Paulo"
     # Origens do frontend autorizadas a chamar a API (separadas por vírgula). Vite usa a 5173.
     cors_origins: str = "http://localhost:5173"

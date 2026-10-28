@@ -3,6 +3,8 @@ import { getToken } from './api'
 
 const routes = [
   { path: '/login', name: 'login', component: () => import('./views/LoginView.vue') },
+  { path: '/esqueci-senha', name: 'forgot', component: () => import('./views/ForgotPasswordView.vue') },
+  { path: '/redefinir-senha', name: 'reset', component: () => import('./views/ResetPasswordView.vue') },
   {
     path: '/',
     component: () => import('./layouts/AppLayout.vue'),
