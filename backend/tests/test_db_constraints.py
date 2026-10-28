@@ -3,22 +3,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
-from app.db.session import engine
 from app.models import Appointment, Client, Service
-
-
-@pytest.fixture
-def db():
-    """Sessão dentro de uma transação que é sempre desfeita no fim."""
-    conn = engine.connect()
-    trans = conn.begin()
-    session = Session(bind=conn, join_transaction_mode="create_savepoint")
-    yield session
-    session.close()
-    trans.rollback()
-    conn.close()
 
 
 def _base(db):
