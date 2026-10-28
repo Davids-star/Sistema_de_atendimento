@@ -7,7 +7,10 @@ class AppointmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     client_id: int
+    client_name: str
+    client_phone: str
     service_id: int
+    service_name: str
     starts_at: datetime
     ends_at: datetime
     status: str

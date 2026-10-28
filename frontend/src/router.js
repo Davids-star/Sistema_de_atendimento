@@ -9,6 +9,10 @@ const routes = [
     meta: { requiresAuth: true },
     children: [
       { path: '', name: 'dashboard', component: () => import('./views/DashboardView.vue') },
+      { path: 'agendamentos', name: 'appointments', component: () => import('./views/AppointmentsView.vue') },
+      { path: 'servicos', name: 'services', component: () => import('./views/ServicesView.vue') },
+      { path: 'clientes', name: 'clients', component: () => import('./views/ClientsView.vue') },
+      { path: 'configuracoes', name: 'settings', component: () => import('./views/SettingsView.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },

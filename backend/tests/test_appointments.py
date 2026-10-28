@@ -215,3 +215,11 @@ def test_audit_trail(client, auth, setup, db):
     actions = [a.action for a in db.scalars(
         select(AuditLog).where(AuditLog.entity_type == "appointment", AuditLog.entity_id == aid).order_by(AuditLog.id))]
     assert actions == ["create", "confirm", "cancel"]
+
+
+def test_response_includes_names(client, auth, setup):
+    body = book(client, auth, setup, at(9)).json()
+    assert body["client_name"] == "Ana" and body["client_phone"] == "5511999990000"
+    assert body["service_name"] == "Corte"
+    listed = client.get(URL, params={"date_from": "2030-01-07", "date_to": "2030-01-07"}, headers=auth).json()
+    assert listed[0]["client_name"] == "Ana" and listed[0]["service_name"] == "Corte"

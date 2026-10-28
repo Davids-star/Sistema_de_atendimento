@@ -2,9 +2,11 @@ from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, func, text
 from sqlalchemy.dialects.postgresql import ExcludeConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
+from app.models.client import Client  # noqa: F401  (usado nos relacionamentos)
+from app.models.service import Service  # noqa: F401
 
 STATUSES = ("pending", "confirmed", "cancelled", "completed", "no_show")
 ACTIVE_STATUSES = ("pending", "confirmed")  # ocupam o horário
@@ -43,3 +45,19 @@ class Appointment(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    # Carregados junto com o agendamento (JOIN) para a API devolver nomes sem consultas extras.
+    client: Mapped["Client"] = relationship(lazy="joined", innerjoin=True)
+    service: Mapped["Service"] = relationship(lazy="joined", innerjoin=True)
+
+    @property
+    def client_name(self) -> str:
+        return self.client.name
+
+    @property
+    def client_phone(self) -> str:
+        return self.client.phone
+
+    @property
+    def service_name(self) -> str:
+        return self.service.name
