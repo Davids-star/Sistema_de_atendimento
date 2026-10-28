@@ -56,8 +56,6 @@ def _flush_or_conflict(db: Session, apply: Callable[[], None]) -> None:
 def _warnings(db: Session, starts: datetime, ends: datetime) -> list[str]:
     """Avisos para o admin, que pode agendar mesmo assim."""
     out = []
-    if starts < _now():
-        out.append("O horário está no passado")
     local_s, local_e = starts.astimezone(TZ), ends.astimezone(TZ)
     hours = db.scalars(select(BusinessHours).where(BusinessHours.weekday == local_s.weekday())).all()
     inside = local_s.date() == local_e.date() and any(
@@ -67,6 +65,11 @@ def _warnings(db: Session, starts: datetime, ends: datetime) -> list[str]:
     if db.scalar(select(BlockedTime.id).where(BlockedTime.starts_at < ends, BlockedTime.ends_at > starts).limit(1)):
         out.append("Coincide com um horário bloqueado")
     return out
+
+
+def _reject_past(starts: datetime) -> None:
+    if starts < _now():
+        raise AppointmentError("Não é possível agendar em um horário que já passou", 422)
 
 
 def _active_service(db: Session, service_id: int) -> Service:
@@ -92,8 +95,10 @@ def get_locked(db: Session, appointment_id: int) -> Appointment:
 def create_appointment(db: Session, *, admin: AdminUser | None, client_id: int | None, client_phone: str | None,
                        client_name: str | None, service_id: int, starts_at: datetime, notes: str | None,
                        status: str, source: str, strict: bool) -> tuple[Appointment, list[str]]:
-    """strict=True (WhatsApp): só aceita horários realmente livres e dentro do expediente.
-    strict=False (admin): aceita qualquer horário que não colida com outro agendamento, devolvendo avisos."""
+    """Nunca agenda no passado. Se o cliente faltou, marque `no_show`: isso libera o horário.
+    strict=True (WhatsApp): só aceita horários realmente livres e dentro do expediente.
+    strict=False (admin): aceita fora do expediente/sobre bloqueios (com avisos), mas nunca sobre outro agendamento."""
+    _reject_past(starts_at)
     service = _active_service(db, service_id)
     if client_id is not None:
         client = db.get(Client, client_id)
@@ -135,6 +140,8 @@ def update_appointment(db: Session, admin: AdminUser, appointment_id: int, chang
     else:
         service, new_price = db.get(Service, appt.service_id), appt.price_cents
     new_start = changes.get("starts_at") or appt.starts_at
+    if new_start != appt.starts_at:
+        _reject_past(new_start)  # remarcar para o passado também não vale
     def apply():
         if "notes" in changes:
             appt.notes = changes["notes"]

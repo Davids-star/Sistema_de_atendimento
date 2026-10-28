@@ -2,9 +2,9 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
-from app.models import AuditLog, BusinessHours
+from app.models import Appointment, AuditLog, BusinessHours
 from app.services import appointments as svc
 
 TZ = ZoneInfo("America/Sao_Paulo")
@@ -67,11 +67,35 @@ def test_cancelled_frees_slot(client, auth, setup):
 def test_admin_warnings_but_allowed(client, auth, setup):
     r = book(client, auth, setup, at(20))
     assert r.status_code == 201 and "Fora do horário de funcionamento" in r.json()["warnings"]
-    past = book(client, auth, setup, datetime(2020, 1, 6, 10, tzinfo=TZ)).json()["warnings"]
-    assert "O horário está no passado" in past
     client.post("/api/v1/blocked-times", headers=auth,
                 json={"starts_at": at(10).isoformat(), "ends_at": at(11).isoformat()})
     assert "Coincide com um horário bloqueado" in book(client, auth, setup, at(10, 30)).json()["warnings"]
+
+
+def test_past_is_rejected_for_admin(client, auth, setup):
+    r = book(client, auth, setup, datetime(2020, 1, 6, 10, tzinfo=TZ))
+    assert r.status_code == 422 and "passou" in r.json()["detail"]
+    aid = book(client, auth, setup, at(9)).json()["id"]
+    r = client.patch(f"{URL}/{aid}", headers=auth, json={"starts_at": datetime(2020, 1, 6, 10, tzinfo=TZ).isoformat()})
+    assert r.status_code == 422
+
+
+def make_started(db, aid, minutes_ago):
+    """Simula um agendamento que já começou (a API não permite criar no passado)."""
+    now = datetime.now(timezone.utc)
+    db.execute(update(Appointment).where(Appointment.id == aid).values(
+        starts_at=now - timedelta(minutes=minutes_ago), ends_at=now + timedelta(minutes=30 - minutes_ago)))
+    db.expire_all()
+
+
+def test_no_show_frees_the_slot_for_someone_else(client, auth, setup, db):
+    aid = book(client, auth, setup, at(9)).json()["id"]
+    make_started(db, aid, minutes_ago=10)  # marcado para 10 min atrás; cliente não apareceu
+    now_plus = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
+    walk_in = {"client_id": setup["cid"], "service_id": setup["sid"], "starts_at": now_plus}
+    assert client.post(URL, json=walk_in, headers=auth).status_code == 409   # ainda ocupa o horário
+    assert client.post(f"{URL}/{aid}/no-show", headers=auth).json()["status"] == "no_show"
+    assert client.post(URL, json=walk_in, headers=auth).status_code == 201   # liberado
 
 
 def test_service_crossing_closing_time_warns(client, auth, setup):
@@ -129,11 +153,16 @@ def test_status_flow(client, auth, setup):
     assert client.post(f"{URL}/999999/cancel", headers=auth).status_code == 404
 
 
-def test_complete_and_no_show_for_past(client, auth, setup):
-    past1 = book(client, auth, setup, datetime(2020, 1, 6, 9, tzinfo=TZ)).json()["id"]
-    past2 = book(client, auth, setup, datetime(2020, 1, 6, 10, tzinfo=TZ)).json()["id"]
-    assert client.post(f"{URL}/{past1}/complete", headers=auth).json()["status"] == "completed"
-    assert client.post(f"{URL}/{past2}/no-show", headers=auth).json()["status"] == "no_show"
+def test_complete_and_no_show_after_start(client, auth, setup, db):
+    a1 = book(client, auth, setup, at(9)).json()["id"]
+    a2 = book(client, auth, setup, at(10)).json()["id"]
+    make_started(db, a1, 40)
+    db.execute(update(Appointment).where(Appointment.id == a2).values(
+        starts_at=datetime.now(timezone.utc) - timedelta(hours=3),
+        ends_at=datetime.now(timezone.utc) - timedelta(hours=2, minutes=30)))
+    db.expire_all()
+    assert client.post(f"{URL}/{a1}/complete", headers=auth).json()["status"] == "completed"
+    assert client.post(f"{URL}/{a2}/no-show", headers=auth).json()["status"] == "no_show"
 
 
 def test_patch_reschedule_and_conflict(client, auth, setup):
