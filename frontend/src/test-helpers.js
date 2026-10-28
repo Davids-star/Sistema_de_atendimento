@@ -7,10 +7,10 @@ export const norm = (s) => s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim()
 export const bodyText = () => norm(document.body.textContent)
 
 // Monta um componente dentro de <v-app> (necessário ao Vuetify). Diálogos ficam em document.body.
-export async function mountView(Component, props = {}) {
+export async function mountView(Component, props = {}, extraPlugins = []) {
   const wrapper = mount(
     { template: '<v-app><C v-bind="p" /></v-app>', components: { C: Component }, data: () => ({ p: props }) },
-    { global: { plugins: [createVuetify({ components, directives })] }, attachTo: document.body },
+    { global: { plugins: [createVuetify({ components, directives }), ...extraPlugins] }, attachTo: document.body },
   )
   await flushPromises()
   return wrapper

@@ -12,6 +12,9 @@ class AdminUser(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True)
     name: Mapped[str] = mapped_column(String(120))
-    password_hash: Mapped[str] = mapped_column(String(255))
+    # Nulo = administrador que só entra com Google (não tem senha).
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    # Identificador estável da conta Google (campo "sub"), gravado no primeiro login com Google.
+    google_sub: Mapped[str | None] = mapped_column(String(64), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 60
     log_level: str = "INFO"
+    google_client_id: str = ""   # vazio = login com Google desligado
     shop_timezone: str = "America/Sao_Paulo"
     # Origens do frontend autorizadas a chamar a API (separadas por vírgula). Vite usa a 5173.
     cors_origins: str = "http://localhost:5173"

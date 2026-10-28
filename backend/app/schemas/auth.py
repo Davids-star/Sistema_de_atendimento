@@ -16,3 +16,11 @@ class AdminOut(BaseModel):
     id: int
     email: EmailStr
     name: str
+
+
+class GoogleLoginRequest(BaseModel):
+    credential: str  # ID token entregue pelo Google ao navegador
+
+
+class AuthConfig(BaseModel):
+    google_client_id: str | None  # nulo = login com Google desligado
