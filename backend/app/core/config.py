@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 60
     log_level: str = "INFO"
+    shop_timezone: str = "America/Sao_Paulo"
     whatsapp_verify_token: str = ""
     whatsapp_access_token: str = ""
     whatsapp_app_secret: str = ""
