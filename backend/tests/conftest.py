@@ -1,13 +1,29 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
-from app.core.security import hash_password
+from app.core.config import settings
+
+# Se TEST_DATABASE_URL estiver no .env, TODOS os testes usam esse banco (o principal fica intocado).
+# Precisa ser decidido antes de importar app.db.session, que cria a conexão.
+if settings.test_database_url:
+    settings.database_url = settings.test_database_url
+
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+
+from app.core import rate_limit  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
 from app.db.session import engine, get_db
 from app.main import app
 from app.models import AdminUser
 
 ADMIN_EMAIL, ADMIN_PASSWORD = "dono@teste.com", "senha-de-teste-123"
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """Contadores são globais em memória: zera antes de cada teste para um não afetar o outro."""
+    rate_limit.general.clear()
+    rate_limit.login_failures.clear()
 
 
 @pytest.fixture

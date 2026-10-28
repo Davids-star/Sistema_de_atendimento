@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin
 from app.db.session import get_db
 from app.models import AdminUser, Appointment
+from app.models.appointment import ACTIVE_STATUSES
 from app.schemas.appointment import AppointmentCreate, AppointmentOut, AppointmentResult, AppointmentUpdate
 from app.services import appointments as svc
 from app.services.availability import day_bounds
@@ -20,7 +21,9 @@ STATUSES = "^(pending|confirmed|cancelled|completed|no_show)$"
 @router.get("", response_model=list[AppointmentOut])
 def list_appointments(date_from: date | None = None, date_to: date | None = None,
                       status_: str | None = Query(None, alias="status", pattern=STATUSES),
-                      client_id: int | None = None, limit: int = Query(100, ge=1, le=500),
+                      client_id: int | None = None,
+                      needs_outcome: bool = Query(False, description="só os que já terminaram e ainda estão pendentes/confirmados"),
+                      limit: int = Query(100, ge=1, le=500),
                       offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
     query = select(Appointment).order_by(Appointment.starts_at, Appointment.id).limit(limit).offset(offset)
     if date_from:
@@ -31,6 +34,8 @@ def list_appointments(date_from: date | None = None, date_to: date | None = None
         query = query.where(Appointment.status == status_)
     if client_id:
         query = query.where(Appointment.client_id == client_id)
+    if needs_outcome:
+        query = query.where(Appointment.status.in_(ACTIVE_STATUSES), Appointment.ends_at < datetime.now(timezone.utc))
     return db.scalars(query).all()
 
 
