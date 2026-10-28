@@ -64,8 +64,8 @@ async function openHistory(c) {
 </script>
 
 <template>
-  <div class="d-flex flex-wrap align-center ga-3 mb-4">
-    <h1 class="text-headline-small mr-auto">Clientes</h1>
+  <div class="d-flex flex-wrap align-center ga-3 mb-6">
+    <div class="mr-auto"><div class="eyebrow mb-1">Cadastro</div><h1 class="page-title">Clientes</h1></div>
     <v-text-field v-model="search" placeholder="Buscar por nome ou telefone" prepend-inner-icon="mdi-magnify"
                   clearable hide-details density="compact" style="max-width: 300px" />
     <v-btn color="primary" prepend-icon="mdi-plus" @click="openNew">Novo cliente</v-btn>
@@ -74,7 +74,8 @@ async function openHistory(c) {
   <v-card>
     <v-progress-linear v-if="loading" indeterminate />
     <v-list v-if="clients.length" lines="one">
-      <v-list-item v-for="c in clients" :key="c.id" :title="c.name" :subtitle="formatPhone(c.phone)">
+      <v-list-item v-for="c in clients" :key="c.id" :title="c.name" :subtitle="formatPhone(c.phone)" class="client-row">
+        <template #prepend><div class="avatar-initial mr-4">{{ c.name.trim().charAt(0).toUpperCase() }}</div></template>
         <template #append>
           <v-btn icon="mdi-history" variant="text" size="small" title="Agendamentos" @click="openHistory(c)" />
           <v-btn icon="mdi-pencil-outline" variant="text" size="small" title="Editar" @click="openEdit(c)" />
@@ -121,3 +122,10 @@ async function openHistory(c) {
     </v-card>
   </v-dialog>
 </template>
+
+<style scoped>
+.client-row { padding-top: 10px; padding-bottom: 10px; }
+.client-row :deep(.v-list-item-title) { font-weight: 600; }
+.client-row :deep(.v-list-item-subtitle) { font-variant-numeric: tabular-nums; }
+.client-row + .client-row { border-top: 1px solid rgba(var(--v-theme-on-surface), 0.07); }
+</style>

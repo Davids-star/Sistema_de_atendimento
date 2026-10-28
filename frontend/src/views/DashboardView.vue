@@ -13,6 +13,8 @@ const PRESETS = [
 ]
 const MAX_DAYS = 366
 const STATUS_LABEL = { pending: 'Pendentes', confirmed: 'Confirmados', completed: 'Concluídos', no_show: 'Ausências', cancelled: 'Cancelados' }
+const STATUS_COLOR = { pending: 'warning', confirmed: 'success', completed: 'primary', no_show: 'error', cancelled: 'neutral' }
+const statusShare = (n) => (summary.value?.total_appointments ? `${(n / summary.value.total_appointments) * 100}%` : '0%')
 
 const preset = ref('this_month')
 const range = ref(presetRange('this_month'))
@@ -94,12 +96,18 @@ const revenueItems = computed(() => {
 </script>
 
 <template>
-  <div class="d-flex flex-wrap align-center ga-3 mb-4">
-    <h1 class="text-headline-small mr-auto">Dashboard</h1>
-    <v-btn-toggle :model-value="preset" mandatory density="comfortable" color="primary" variant="outlined"
-                  divided @update:model-value="onPreset">
+  <div class="d-flex flex-wrap align-center ga-3 mb-6">
+    <div class="mr-auto">
+      <div class="eyebrow mb-1">Visão geral</div>
+      <h1 class="page-title">Dashboard</h1>
+    </div>
+    <v-btn-toggle class="d-none d-sm-flex" :model-value="preset" mandatory density="comfortable" color="primary"
+                  variant="outlined" divided @update:model-value="onPreset">
       <v-btn v-for="p in PRESETS" :key="p.value" :value="p.value" size="small">{{ p.title }}</v-btn>
     </v-btn-toggle>
+    <!-- No celular os 4 botões não cabem: vira uma lista de seleção -->
+    <v-select class="d-sm-none period-select" :model-value="preset" :items="PRESETS" item-title="title" item-value="value"
+              density="compact" hide-details aria-label="Período" @update:model-value="onPreset" />
   </div>
 
   <v-row v-if="preset === 'custom'" class="mb-1">
@@ -119,70 +127,89 @@ const revenueItems = computed(() => {
   </v-alert>
 
   <v-alert v-if="pendingOutcome > 0" type="warning" variant="tonal" class="mb-4" icon="mdi-clock-alert-outline">
-    {{ pendingOutcome >= PENDING_LIMIT ? `${PENDING_LIMIT}+` : pendingOutcome }}
-    agendamento(s) já terminaram e ainda não foram marcados como concluídos ou ausentes.
-    Os indicadores de faturamento e ausência só contam atendimentos finalizados.
+    <strong>{{ pendingOutcome >= PENDING_LIMIT ? `${PENDING_LIMIT}+` : pendingOutcome }}
+      agendamento(s)</strong> já terminaram e ainda não foram marcados como concluídos ou ausentes.
+    O faturamento e a taxa de ausência só contam atendimentos finalizados.
+    <template #append>
+      <v-btn variant="text" size="small" :to="{ name: 'appointments' }">Revisar</v-btn>
+    </template>
   </v-alert>
 
-  <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
+  <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" rounded />
 
   <template v-if="summary">
-    <v-row>
-      <v-col v-for="c in cards" :key="c.title" cols="12" sm="6" lg="4" xl="2">
-        <v-card class="pa-4 h-100">
-          <div class="d-flex align-center text-body-medium text-medium-emphasis">
-            <v-icon :icon="c.icon" size="20" class="mr-2" />{{ c.title }}
-          </div>
-          <div class="text-headline-medium font-weight-medium my-1">{{ c.value }}</div>
-          <div class="text-body-small text-medium-emphasis">{{ c.sub }}</div>
-        </v-card>
-      </v-col>
-    </v-row>
+    <div class="grid grid-kpi">
+      <v-card v-for="(c, i) in cards" :key="c.title" class="kpi" :class="{ feature: i === 1 }">
+        <div class="kpi-head">
+          <span class="kpi-icon"><v-icon :icon="c.icon" size="20" /></span>
+          <span class="eyebrow">{{ c.title }}</span>
+        </div>
+        <div class="kpi-value num">{{ c.value }}</div>
+        <div class="kpi-sub">{{ c.sub }}</div>
+      </v-card>
+    </div>
 
-    <v-row class="mt-1">
-      <v-col cols="12" lg="6">
-        <v-card class="pa-4 h-100">
-          <div class="text-title-medium mb-3">Agendamentos por dia</div>
-          <BarChart :items="dayItems" />
-        </v-card>
-      </v-col>
-      <v-col cols="12" lg="6">
-        <v-card class="pa-4 h-100">
-          <div class="d-flex align-baseline mb-3">
-            <div class="text-title-medium mr-auto">Faturamento registrado</div>
-            <div class="text-body-medium text-medium-emphasis">Total: {{ formatBRL(revenue?.total_cents) }}</div>
-          </div>
-          <BarChart :items="revenueItems" color="secondary" />
-        </v-card>
-      </v-col>
-    </v-row>
+    <div class="grid grid-2 mt-4">
+      <v-card class="pa-5">
+        <div class="section-title mb-4">Agendamentos por dia</div>
+        <BarChart :items="dayItems" />
+      </v-card>
+      <v-card class="pa-5">
+        <div class="d-flex align-baseline mb-4">
+          <div class="section-title mr-auto">Faturamento registrado</div>
+          <div class="text-body-small text-medium-emphasis">Total <strong class="num">{{ formatBRL(revenue?.total_cents) }}</strong></div>
+        </div>
+        <BarChart :items="revenueItems" color="secondary" :format="formatBRL" />
+      </v-card>
+    </div>
 
-    <v-row class="mt-1">
-      <v-col cols="12" md="6">
-        <v-card class="pa-4 h-100">
-          <div class="text-title-medium mb-3">Situação dos agendamentos</div>
-          <v-list density="compact" class="pa-0">
-            <v-list-item v-for="(label, key) in STATUS_LABEL" :key="key" :title="label" class="px-0">
-              <template #append><span class="font-weight-medium">{{ summary.by_status[key] }}</span></template>
-            </v-list-item>
-          </v-list>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="6">
-        <v-card class="pa-4 h-100">
-          <div class="text-title-medium mb-3">Serviços mais realizados</div>
-          <v-table v-if="summary.top_services.length" density="comfortable">
-            <thead><tr><th>Serviço</th><th class="text-right">Qtd.</th><th class="text-right">Faturamento</th></tr></thead>
-            <tbody>
-              <tr v-for="s in summary.top_services" :key="s.service_id">
-                <td>{{ s.name }}</td><td class="text-right">{{ s.count }}</td>
-                <td class="text-right">{{ formatBRL(s.revenue_cents) }}</td>
-              </tr>
-            </tbody>
-          </v-table>
-          <div v-else class="text-body-medium text-medium-emphasis">Nenhum atendimento concluído no período.</div>
-        </v-card>
-      </v-col>
-    </v-row>
+    <div class="grid grid-2 mt-4">
+      <v-card class="pa-5">
+        <div class="section-title mb-4">Situação dos agendamentos</div>
+        <div v-for="(label, key) in STATUS_LABEL" :key="key" class="status-row">
+          <span class="dot" :style="{ background: `rgb(var(--v-theme-${STATUS_COLOR[key]}))` }" />
+          <span class="status-label">{{ label }}</span>
+          <span class="bar-track"><span class="bar-fill" :style="{ width: statusShare(summary.by_status[key]), background: `rgb(var(--v-theme-${STATUS_COLOR[key]}))` }" /></span>
+          <span class="num status-count">{{ summary.by_status[key] }}</span>
+        </div>
+      </v-card>
+      <v-card class="pa-5">
+        <div class="section-title mb-4">Serviços mais realizados</div>
+        <v-table v-if="summary.top_services.length" density="comfortable">
+          <thead><tr><th>Serviço</th><th class="text-right">Qtd.</th><th class="text-right">Faturamento</th></tr></thead>
+          <tbody>
+            <tr v-for="s in summary.top_services" :key="s.service_id">
+              <td class="font-weight-medium">{{ s.name }}</td><td class="text-right num">{{ s.count }}</td>
+              <td class="text-right num">{{ formatBRL(s.revenue_cents) }}</td>
+            </tr>
+          </tbody>
+        </v-table>
+        <div v-else class="text-body-medium text-medium-emphasis">Nenhum atendimento concluído no período.</div>
+      </v-card>
+    </div>
   </template>
 </template>
+
+<style scoped>
+/* seletor de período no celular ocupa a largura toda */
+.period-select { flex: 1 1 100%; }
+.kpi { padding: 20px 22px; display: flex; flex-direction: column; gap: 6px; }
+.kpi-head { display: flex; align-items: center; gap: 10px; }
+.kpi-icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+            background: rgba(var(--v-theme-primary), 0.09); color: rgb(var(--v-theme-primary)); }
+.kpi-value { font-size: 2rem; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; margin-top: 6px; }
+.kpi-sub { font-size: 0.8rem; color: rgba(var(--v-theme-on-surface), 0.6); }
+
+/* Cartão de destaque (faturamento registrado) */
+.kpi.feature { background: var(--ink); border-color: transparent !important; color: #f3ece0; }
+.kpi.feature .kpi-icon { background: rgba(215, 174, 98, 0.18); color: #e8c680; }
+.kpi.feature .kpi-sub { color: rgba(243, 236, 224, 0.62); }
+.v-theme--dark .kpi.feature { background: linear-gradient(145deg, #2a2415, #171d27); border: 1px solid rgba(215, 174, 98, 0.3) !important; }
+
+.status-row { display: grid; grid-template-columns: 10px 110px 1fr 40px; align-items: center; gap: 12px; padding: 7px 0; }
+.dot { width: 10px; height: 10px; border-radius: 50%; }
+.status-label { font-size: 0.9rem; }
+.bar-track { height: 8px; border-radius: 4px; background: rgba(var(--v-theme-on-surface), 0.07); overflow: hidden; }
+.bar-fill { display: block; height: 100%; border-radius: 4px; min-width: 2px; opacity: 0.85; }
+.status-count { text-align: right; font-weight: 600; }
+</style>

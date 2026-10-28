@@ -95,8 +95,8 @@ async function confirmDelete() {
 </script>
 
 <template>
-  <div class="d-flex flex-wrap align-center ga-3 mb-4">
-    <h1 class="text-headline-small mr-auto">Serviços</h1>
+  <div class="d-flex flex-wrap align-center ga-3 mb-6">
+    <div class="mr-auto"><div class="eyebrow mb-1">Catálogo</div><h1 class="page-title">Serviços</h1></div>
     <v-switch v-model="showInactive" label="Mostrar inativos" hide-details density="compact" color="primary" />
     <v-btn color="primary" prepend-icon="mdi-plus" @click="openNew">Novo serviço</v-btn>
   </div>

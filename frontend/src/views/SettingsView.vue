@@ -86,18 +86,17 @@ onMounted(async () => {
 </script>
 
 <template>
-  <h1 class="text-headline-small mb-4">Configurações</h1>
+  <div class="mb-6"><div class="eyebrow mb-1">Funcionamento</div><h1 class="page-title">Configurações</h1></div>
 
   <v-card class="pa-4 mb-4">
-    <div class="text-title-medium">Intervalo entre horários</div>
+    <div class="section-title">Intervalo entre horários</div>
     <p class="text-body-medium text-medium-emphasis mb-3">
       De quanto em quanto tempo começam os horários oferecidos ao cliente (ex.: 30 min → 9:00, 9:30, 10:00…).
     </p>
     <div class="d-flex flex-wrap align-center ga-3">
-      <v-btn-toggle :model-value="+interval" density="comfortable" variant="outlined" color="primary" divided
-                    @update:model-value="(v) => v && (interval = v)">
-        <v-btn v-for="m in INTERVAL_PRESETS" :key="m" :value="m" size="small">{{ m }} min</v-btn>
-      </v-btn-toggle>
+      <v-chip-group :model-value="+interval" mandatory selected-class="text-primary" @update:model-value="(v) => v && (interval = v)">
+        <v-chip v-for="m in INTERVAL_PRESETS" :key="m" :value="m" filter variant="outlined">{{ m }} min</v-chip>
+      </v-chip-group>
       <v-text-field v-model="interval" label="Outro valor (min)" type="number" hide-details density="compact"
                     style="max-width: 170px" :error="!intervalOk" />
       <v-btn color="primary" :loading="intervalSaving" :disabled="!intervalOk" @click="saveInterval">Salvar</v-btn>
@@ -105,7 +104,7 @@ onMounted(async () => {
   </v-card>
 
   <v-card class="pa-4 mb-4">
-    <div class="text-title-medium">Horário de funcionamento</div>
+    <div class="section-title">Horário de funcionamento</div>
     <p class="text-body-medium text-medium-emphasis mb-3">
       Um dia sem horário fica fechado. Use mais de um intervalo para marcar uma pausa (ex.: 9h–12h e 14h–18h).
     </p>
@@ -129,7 +128,7 @@ onMounted(async () => {
   </v-card>
 
   <v-card class="pa-4">
-    <div class="text-title-medium">Bloqueios</div>
+    <div class="section-title">Bloqueios</div>
     <p class="text-body-medium text-medium-emphasis mb-3">
       Períodos em que não se atende (folga, médico, feriado). Não aparecem como disponíveis para o cliente.
     </p>
@@ -152,6 +151,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.v-list-item :deep(.v-list-item-title) { white-space: normal; }
 .day-row { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
 .day-name { width: 120px; padding-top: 8px; font-weight: 500; flex-shrink: 0; }
 @media (max-width: 600px) { .day-row { flex-wrap: wrap; } .day-name { width: 100%; padding-top: 0; } }

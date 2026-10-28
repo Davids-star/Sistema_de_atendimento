@@ -1,0 +1,94 @@
+/* Identidade visual do painel: tipografia, superfícies e componentes compartilhados. */
+:root {
+  --v-font-body: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --v-font-heading: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+  --brass: #b8893a;
+  --ink: #141f2b;
+}
+
+body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiased; }
+.v-application { letter-spacing: -0.003em; }
+
+/* Números alinhados em colunas (valores, horários) */
+.num, .v-data-table td, .v-data-table th { font-variant-numeric: tabular-nums; }
+
+/* Títulos de página e de diálogo em serifa: dá o ar de barbearia clássica */
+.page-title {
+  font-family: var(--font-display);
+  font-size: 1.85rem; font-weight: 600; line-height: 1.15; letter-spacing: -0.015em;
+  font-variation-settings: 'opsz' 48;
+}
+.v-card-title { font-family: var(--font-display); font-weight: 600; font-size: 1.25rem !important; letter-spacing: -0.01em; }
+.section-title { font-size: 1rem; font-weight: 600; letter-spacing: -0.005em; }
+.eyebrow { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.62; }
+
+/* Cartões: borda fina no lugar de sombra pesada */
+.v-card { border-color: rgba(var(--v-border-color), 0.12) !important; }
+.v-theme--dark .v-card { border-color: rgba(255, 255, 255, 0.08) !important; }
+
+/* Texto dentro de alertas legível (o tonal puro deixa o laranja fraco sobre o pêssego) */
+.v-alert .v-alert__content { color: rgb(var(--v-theme-on-surface)); }
+.v-alert--variant-tonal { border: 1px solid currentColor; border-color: rgba(var(--v-theme-on-surface), 0.0); }
+
+/* Tabelas */
+.v-table { background: transparent !important; }
+.v-data-table thead th, .v-table thead th {
+  font-size: 0.72rem !important; font-weight: 600 !important; letter-spacing: 0.07em; text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), 0.6) !important;
+}
+.v-data-table tbody tr:hover td, .v-table tbody tr:hover td { background: rgba(var(--v-theme-primary), 0.04); }
+
+/* Botões em grupo (períodos, abas) mais discretos */
+.v-btn-toggle .v-btn { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.v-btn { text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+/* Campos: foco em latão no tema escuro já vem do primary; aqui só o respiro */
+.v-field { border-radius: 10px; }
+
+/* Rolagem e seleção de texto na cor da marca */
+::selection { background: rgba(184, 137, 58, 0.3); }
+
+/* Barra lateral: sempre escura, nos dois temas */
+.sidebar.v-navigation-drawer { background: var(--ink) !important; border-right: none !important; }
+.v-theme--dark .sidebar.v-navigation-drawer { background: #0a0d12 !important; border-right: 1px solid rgba(255, 255, 255, 0.06) !important; }
+.sidebar .brand { display: flex; align-items: center; gap: 12px; padding: 22px 20px 18px; }
+.sidebar .brand-mark {
+  width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0;
+  background: linear-gradient(145deg, #d7ae62, #a97c2f); color: #1a1408;
+}
+.sidebar .brand-name { font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; line-height: 1.1; color: #f3ece0; }
+.sidebar .brand-sub { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(243, 236, 224, 0.5); margin-top: 2px; }
+.sidebar .v-list { padding: 8px 12px; }
+.sidebar .v-list-item {
+  border-radius: 10px; margin-bottom: 4px; min-height: 44px; color: rgba(243, 236, 224, 0.72);
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar .v-list-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.sidebar .v-list-item--active { background: rgba(215, 174, 98, 0.14) !important; color: #e8c680 !important; }
+.sidebar .v-list-item--active .v-list-item__overlay { opacity: 0; }
+.sidebar .v-list-item--active::before {
+  content: ''; position: absolute; left: -12px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: #d7ae62;
+}
+.sidebar .v-list-item-title { font-size: 0.92rem; font-weight: 500; }
+.sidebar .v-list-item .v-icon { opacity: 0.9; }
+.sidebar .sidebar-foot { padding: 14px 20px 18px; border-top: 1px solid rgba(255, 255, 255, 0.07); font-size: 0.75rem; color: rgba(243, 236, 224, 0.45); }
+
+/* Barra superior */
+.app-bar.v-app-toolbar, .app-bar.v-toolbar { background: transparent !important; }
+.avatar-initial {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 0.85rem;
+  background: rgba(var(--v-theme-secondary), 0.16); color: rgb(var(--v-theme-secondary));
+}
+
+/* Grades responsivas reutilizáveis */
+.grid { display: grid; gap: 16px; }
+.grid-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 960px) { .grid-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .grid-kpi { grid-template-columns: minmax(0, 1fr); } }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .page-title { font-size: 1.55rem; } }
+
+/* Espaço no fim da página no celular para o botão flutuante não cobrir o último item */
+@media (max-width: 600px) { .page { padding-bottom: 96px !important; } }
