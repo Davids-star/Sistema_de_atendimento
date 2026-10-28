@@ -2,8 +2,13 @@ from fastapi import APIRouter, FastAPI
 
 from app.api import health
 from app.api.v1 import auth, services
+from app.core.logging import setup_logging
+from app.core.middleware import request_logging
+
+setup_logging()
 
 app = FastAPI(title="Agendamento Barbearia", version="0.1.0")
+app.middleware("http")(request_logging)
 app.include_router(health.router)
 
 api_v1 = APIRouter(prefix="/api/v1")
