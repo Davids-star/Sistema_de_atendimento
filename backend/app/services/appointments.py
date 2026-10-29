@@ -94,7 +94,8 @@ def get_locked(db: Session, appointment_id: int) -> Appointment:
 
 def create_appointment(db: Session, *, admin: AdminUser | None, client_id: int | None, client_phone: str | None,
                        client_name: str | None, service_id: int, starts_at: datetime, notes: str | None,
-                       status: str, source: str, strict: bool) -> tuple[Appointment, list[str]]:
+                       status: str, source: str, strict: bool,
+                       conversation_id: int | None = None) -> tuple[Appointment, list[str]]:
     """Nunca agenda no passado. Se o cliente faltou, marque `no_show`: isso libera o horário.
     strict=True (WhatsApp): só aceita horários realmente livres e dentro do expediente.
     strict=False (admin): aceita fora do expediente/sobre bloqueios (com avisos), mas nunca sobre outro agendamento."""
@@ -119,7 +120,8 @@ def create_appointment(db: Session, *, admin: AdminUser | None, client_id: int |
         _check_strict(db, starts_at, service)
     ends_at = starts_at + timedelta(minutes=service.duration_minutes)
     appt = Appointment(client_id=client.id, service_id=service.id, starts_at=starts_at, ends_at=ends_at,
-                       status=status, price_cents=service.price_cents, source=source, notes=notes)
+                       status=status, price_cents=service.price_cents, source=source, notes=notes,
+                       conversation_id=conversation_id)
     _flush_or_conflict(db, lambda: db.add(appt))
     warnings = [] if strict else _warnings(db, starts_at, ends_at)
     audit.record(db, admin, "create", "appointment", appt.id,

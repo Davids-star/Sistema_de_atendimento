@@ -503,17 +503,60 @@ def test_typed_phone_in_test_mode_lets_the_person_book(db, typed_ok):
     assert appt.client.name == "Maria Teste" and appt.source == "telegram"
 
 
-def test_typed_phone_never_gives_access_to_view_or_cancel(db, typed_ok):
+def test_typed_phone_sees_and_cancels_only_what_this_conversation_booked(db, typed_ok):
     c = Chat(db)
     to_phone_step(c)
     c.send("11 97777-6666"); c.send("Maria Teste"); c.press("Confirmar")
     appt = appointments(db)[0]
+    assert appt.conversation_id == c.conv().id                                   # o agendamento guarda quem o criou
+    c.press("Meus horários")
+    assert "Seus próximos agendamentos" in c.text() and "Manicure" in c.text()   # ela VÊ o que marcou
+    c.press("Cancelar 1"); c.press("Sim, cancelar")
+    assert c.text() == texts.CANCELLED and db.get(Appointment, appt.id).status == "cancelled"
+
+
+def test_a_typed_number_never_exposes_what_the_real_owner_books_later(db, typed_ok):
+    """O ataque que o desenho evita: A digita um número livre ANTES da dona; depois a dona (confirmada) agenda."""
+    attacker = Chat(db, "6001")
+    to_phone_step(attacker)
+    attacker.send("(11) 97777-6666"); attacker.send("Impostora")                  # cadastra o número da futura vítima
+    assert attacker.conv().phone_verified is False
+    victim = Chat(db, "6002")
+    victim.send("/start")
+    victim.send(phone="5511977776666")                                            # a dona chega pelo contato confirmado
+    victim.press("Agendar"); victim.press("Pedicure"); victim.press(""); victim.press(":")
+    victim.press("Confirmar")
+    hers = [a for a in appointments(db) if a.conversation_id == victim.conv().id]
+    assert len(hers) == 1                                                         # a vítima agendou
+    # A impostora está ligada ao MESMO cadastro de cliente, mas não enxerga nem cancela o agendamento da dona.
+    assert attacker.conv().client_id == victim.conv().client_id
+    assert texts.NOTHING_BOOKED_UNVERIFIED in attacker.send(data="mine")[0].text
+    for data in (f"cancel:{hers[0].id}", f"cancel_yes:{hers[0].id}"):
+        assert texts.CANNOT_CANCEL in attacker.send(data=data)[0].text
+    db.refresh(hers[0])
+    assert hers[0].status == "confirmed"
+    victim.press("Meus horários")
+    assert "Seus próximos agendamentos" in victim.text() and "Pedicure" in victim.text()   # e a dona vê o dela normalmente
+
+
+def test_unverified_with_nothing_booked_here_is_invited_to_share_the_contact(db, typed_ok):
+    c = Chat(db)
+    to_phone_step(c)
+    c.send("11 97777-6666"); c.send("Maria Teste")
     r = c.send(data="mine")
-    assert r[0].text == texts.VERIFY_TO_MANAGE and r[0].ask_contact                              # pede a confirmação
-    for data in (f"cancel:{appt.id}", f"cancel_yes:{appt.id}"):
-        assert texts.CANNOT_CANCEL in c.send(data=data)[0].text
-    db.refresh(appt)
-    assert appt.status == "confirmed"
+    assert r[0].text == texts.NOTHING_BOOKED_UNVERIFIED and r[0].ask_contact
+
+
+def test_appointments_made_in_the_panel_are_not_visible_to_unverified_numbers(db, typed_ok):
+    c = Chat(db)
+    to_phone_step(c)
+    c.send("11 97777-6666"); c.send("Maria Teste")
+    from app.services import appointments as svc
+    service = db.scalar(select(Service).where(Service.name == "Pedicure"))
+    appt, _ = svc.create_appointment(db, admin=None, client_id=c.conv().client_id, client_phone=None, client_name=None, service_id=service.id,
+                                     starts_at=datetime.now(timezone.utc) + timedelta(days=3), notes=None, status="confirmed", source="admin", strict=False)
+    assert appt.conversation_id is None
+    assert texts.NOTHING_BOOKED_UNVERIFIED in c.send(data="mine")[0].text
 
 
 def test_sharing_the_contact_later_unlocks_viewing_and_cancelling(db, typed_ok):
@@ -523,7 +566,7 @@ def test_sharing_the_contact_later_unlocks_viewing_and_cancelling(db, typed_ok):
     c.send(phone="5511977776666")                                                                # agora confirmou pelo botão
     assert c.conv().phone_verified is True
     c.press("Meus horários")
-    assert "Seus próximos agendamentos" in c.text()
+    assert "Seus próximos agendamentos" in c.text()                                              # confirmado: vê todos os da cliente
 
 
 def test_typed_phone_of_an_existing_client_is_refused(db, typed_ok):

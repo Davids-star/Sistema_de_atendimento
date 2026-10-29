@@ -75,6 +75,8 @@ EXPIRED = "Essa opção já expirou. Vamos recomeçar 🙂"
 SLOT_TAKEN = "Poxa, esse horário acabou de ser ocupado por outra pessoa. Vamos escolher outro:"
 SLOT_GONE = "Esse horário não está mais disponível. Vamos escolher outro:"
 NOTHING_BOOKED = "Você não tem agendamentos futuros."
+NOTHING_BOOKED_UNVERIFIED = ("Você não tem agendamentos futuros feitos por esta conversa. "
+                             "Para ver os de outros cadastros seus, toque em \"📱 Compartilhar meu número\" (confirma que o número é seu).")
 CANCELLED = "Pronto, o agendamento foi cancelado. O horário foi liberado."
 CANNOT_CANCEL = "Não consegui cancelar esse agendamento. Ele pode já ter sido cancelado ou ter passado."
 

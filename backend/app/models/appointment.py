@@ -41,6 +41,9 @@ class Appointment(Base):
     price_cents: Mapped[int]  # preço no momento do agendamento (histórico não muda se o serviço mudar)
     source: Mapped[str] = mapped_column(String(20), default="admin", server_default="admin")
     notes: Mapped[str | None] = mapped_column(Text)
+    # Conversa do bot que criou o agendamento (nulo = criado pelo painel). Quem não confirmou o telefone só enxerga
+    # e cancela os agendamentos que ele mesmo marcou nesta conversa.
+    conversation_id: Mapped[int | None] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), index=True)
     # Lembrete ao cliente: quando foi enviado (nulo = ainda não) e quantas tentativas já foram feitas.
     reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reminder_attempts: Mapped[int] = mapped_column(default=0, server_default="0")

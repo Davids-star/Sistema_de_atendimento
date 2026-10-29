@@ -25,6 +25,11 @@ Também há **Meus agendamentos** (com cancelamento). Tudo por botões; texto li
 
 ## Segurança
 - No Telegram o celular só vale pelo botão **"Compartilhar meu número"** e se o contato for da própria pessoa.
+  - **Modo de teste** (`BOT_ALLOW_TYPED_PHONE=true`): aceita o número digitado, mas esse número não é confirmado. Nesse caso a pessoa
+    **vê e cancela só o que ela mesma marcou naquela conversa** (cada agendamento guarda a conversa que o criou). Para ver os demais
+    agendamentos do cadastro, precisa compartilhar o contato. Isso impede que alguém digite o número de outra pessoa e depois enxergue
+    o que ela marcar.
+  - No **WhatsApp** o número já vem confirmado, então a cliente vê e cancela todos os seus agendamentos normalmente.
   Digitar um número não prova nada, então não dá para ver ou cancelar agendamentos de outra pessoa.
 - Botões antigos ou forjados são revalidados no banco antes de qualquer ação.
 - Cada mensagem é registrada uma única vez (o Telegram pode reenviar).

@@ -361,7 +361,8 @@ def _confirm(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
         # strict=True: só aceita horário realmente livre, dentro do expediente e na grade (nunca no passado).
         appt, _ = appt_service.create_appointment(
             db, admin=None, client_id=client.id, client_phone=None, client_name=None, service_id=service.id,
-            starts_at=start, notes=None, status="confirmed", source=conv.channel, strict=True)
+            starts_at=start, notes=None, status="confirmed", source=conv.channel, strict=True,
+            conversation_id=conv.id)
     except appt_service.AppointmentError:
         _set(conv, "choose_time")
         return _show_times(db, conv, service.id, start.astimezone(TZ).date(), texts.SLOT_TAKEN)
@@ -373,18 +374,26 @@ def _confirm(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
 
 # ---------------------------------------------------------------- meus agendamentos / cancelar
 def _my_upcoming(db: Session, conv: Conversation) -> list[Appointment]:
-    if not conv.client_id or not conv.phone_verified:   # número só digitado não dá acesso a agendamentos
+    """Agendamentos futuros que ESTA conversa pode ver e cancelar.
+
+    - Número confirmado pelo canal (WhatsApp; contato compartilhado): todos os da cliente.
+    - Número só digitado: apenas os que ELA mesma marcou nesta conversa. Assim, quem digita o número de outra pessoa
+      nunca enxerga o que a dona do número marcar depois.
+    """
+    if not conv.client_id:
         return []
-    return list(db.scalars(select(Appointment).where(
-        Appointment.client_id == conv.client_id, Appointment.status.in_(ACTIVE_STATUSES), Appointment.starts_at > _now())
-        .order_by(Appointment.starts_at).limit(5)))
+    query = select(Appointment).where(Appointment.client_id == conv.client_id,
+                                      Appointment.status.in_(ACTIVE_STATUSES), Appointment.starts_at > _now())
+    if not conv.phone_verified:
+        query = query.where(Appointment.conversation_id == conv.id)
+    return list(db.scalars(query.order_by(Appointment.starts_at).limit(5)))
 
 
 def _mine(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
-    if conv.client_id and not conv.phone_verified:
-        return [Reply(texts.VERIFY_TO_MANAGE, ask_contact=True)]
     items = _my_upcoming(db, conv)
     if not items:
+        if conv.client_id and not conv.phone_verified:
+            return [Reply(texts.NOTHING_BOOKED_UNVERIFIED, _menu_buttons(), ask_contact=True)]
         return [Reply(texts.NOTHING_BOOKED, _menu_buttons())]
     lines = [texts.my_appointment(i, a.service.name, a.starts_at, a.status) for i, a in enumerate(items, 1)]
     rows = [[Button(f"❌ Cancelar {i}", f"cancel:{a.id}")] for i, a in enumerate(items, 1)]
