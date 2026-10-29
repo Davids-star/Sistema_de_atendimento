@@ -57,10 +57,12 @@ def summary(p: Period = Depends(), db: Session = Depends(get_db)):
         .where(*p.where(), Appointment.status == "completed")
         .group_by(Service.id, Service.name).order_by(func.count().desc(), Service.name).limit(5)).all()
     return SummaryOut(
-        date_from=p.date_from, date_to=p.date_to, total_appointments=sum(counts.values()), by_status=counts,
+        date_from=p.date_from, date_to=p.date_to, total_appointments=sum(counts.values()),
+        scheduled_appointments=sum(n for k, n in counts.items() if k != "cancelled"), by_status=counts,
         revenue_cents=money("completed"), expected_revenue_cents=money("pending", "confirmed"),
         no_show_rate=round(counts["no_show"] / base, 4) if base else None,
-        unique_clients=db.scalar(select(func.count(func.distinct(Appointment.client_id))).where(*p.where())),
+        # "Atendidos" = quem teve ao menos um atendimento CONCLUÍDO (cancelado, ausente e pendente não contam).
+        unique_clients=db.scalar(select(func.count(func.distinct(Appointment.client_id))).where(*p.where(), Appointment.status == "completed")),
         new_clients=db.scalar(select(func.count()).select_from(Client).where(
             Client.created_at >= p.start, Client.created_at < p.end)),
         top_services=[{"service_id": i, "name": n, "count": c, "revenue_cents": int(r)} for i, n, c, r in top])

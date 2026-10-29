@@ -132,4 +132,18 @@ describe('DailyBreakdown', () => {
     expect(info.getAttribute('title')).toBe('Faturamento = atendimentos concluídos.')
     expect(info.getAttribute('aria-label')).toBe('Faturamento = atendimentos concluídos.')
   })
+
+  it('"Agendamentos" não conta os cancelados do dia', async () => {
+    api.mockImplementation(async (path, { params }) => {
+      if (path === '/dashboard/appointments-by-day') {
+        return [{ date: params.date_from, total: 5, by_status: { pending: 0, confirmed: 1, cancelled: 2, completed: 2, no_show: 0 } }]
+      }
+      return { group_by: 'day', points: [{ period: params.date_from, revenue_cents: 9000, completed_count: 2 }] }
+    })
+    await mountView(DailyBreakdown)
+    await click('.breakdown button', 'Dia')
+    const tiles = [...document.querySelectorAll('.tile')].map((t) => norm(t.textContent))
+    expect(tiles[0]).toBe('3Agendamentos')           // 5 no total - 2 cancelados
+    expect(tiles[1]).toBe('2Concluídos')
+  })
 })

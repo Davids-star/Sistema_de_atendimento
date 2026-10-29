@@ -75,3 +75,33 @@ def notify_owner_booking(appointment_id: int, via: str = "bot") -> None:
         text = (f"Novo agendamento pelo {via}\n\n{appt.service.name}\n{appt.client.name} · {_format_phone(appt.client.phone)}\n"
                 f"{local:%d/%m/%Y às %H:%M}")
         telegram.send_message(settings.telegram_chat_id, text)
+
+
+def build_cancellation_message(appt, when_text: str) -> str:
+    cancelled = appt.cancelled_at.astimezone().strftime("%d/%m/%Y %H:%M") if appt.cancelled_at else "agora"
+    return ("❌ Agendamento cancelado\n\n"
+            f"Cliente: {appt.client.name} · {_format_phone(appt.client.phone)}\n"
+            f"Serviço: {appt.service.name}\n"
+            f"Horário: {when_text}\n"
+            f"Cancelado por: {appt.cancelled_by or 'não informado'}\n"
+            f"Quando: {cancelled}\n\n"
+            "O horário já voltou a ficar disponível.")
+
+
+def notify_owner_cancellation(appointment_id: int) -> None:
+    """Avisa o dono (e-mail e, se estiver configurado, Telegram) que um agendamento foi cancelado e QUEM cancelou."""
+    try:
+        from app.models import Appointment
+        from app.services.availability import TZ
+        with SessionLocal() as db:
+            appt = db.get(Appointment, appointment_id)
+            if appt is None or appt.status != "cancelled":
+                return
+            local = appt.starts_at.astimezone(TZ)
+            text = build_cancellation_message(appt, f"{local:%d/%m/%Y às %H:%M}")
+            for owner in db.scalars(select(AdminUser).where(AdminUser.is_owner, AdminUser.is_active)).all():
+                mailer.send_mail(owner.email, f"Agendamento cancelado: {appt.client.name}", text)
+            if telegram.enabled():
+                telegram.send_message(settings.telegram_chat_id, text)
+    except Exception:
+        logger.exception("falha ao avisar o dono do cancelamento")

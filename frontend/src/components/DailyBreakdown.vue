@@ -31,7 +31,8 @@ async function load() {
     ])
     if (mine !== request) return
     const cents = new Map(revenue.points.map((p) => [p.period, p.revenue_cents]))
-    days.value = byDay.map((d) => ({ date: d.date, total: d.total, done: d.by_status.completed ?? 0,
+    // "Agendamentos" não conta os cancelados (o horário voltou a ficar livre), igual ao cartão do dashboard.
+    days.value = byDay.map((d) => ({ date: d.date, total: d.total - (d.by_status.cancelled ?? 0), done: d.by_status.completed ?? 0,
       noShow: d.by_status.no_show ?? 0, cents: cents.get(d.date) ?? 0 }))
   } catch (e) {
     if (mine === request) error.value = e.message

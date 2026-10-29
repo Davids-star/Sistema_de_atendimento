@@ -17,7 +17,7 @@ const PRESETS = [
 const MAX_DAYS = 366
 const STATUS_LABEL = { pending: 'Pendentes', confirmed: 'Confirmados', completed: 'Concluídos', no_show: 'Ausências', cancelled: 'Cancelados' }
 const STATUS_COLOR = { pending: 'warning', confirmed: 'success', completed: 'primary', no_show: 'error', cancelled: 'neutral' }
-const statusShare = (n) => (summary.value?.total_appointments ? `${(n / summary.value.total_appointments) * 100}%` : '0%')
+const statusShare = (n) => (summary.value?.total_appointments ? `${(n / summary.value.total_appointments) * 100}%` : '0%')   // total = todos os status
 
 const preset = ref('this_month')
 const range = ref(presetRange('this_month'))
@@ -68,12 +68,13 @@ const cards = computed(() => {
   const s = summary.value
   if (!s) return []
   return [
-    { title: 'Agendamentos', value: s.total_appointments, icon: 'mdi-calendar-check', sub: `${s.by_status.completed} concluídos` },
+    { title: 'Agendamentos', value: s.scheduled_appointments ?? s.total_appointments, icon: 'mdi-calendar-check',
+      sub: `${s.by_status.completed} concluídos` + (s.by_status.cancelled ? ` · ${s.by_status.cancelled} cancelado(s)` : '') },
     { title: 'Faturamento registrado', value: formatBRL(s.revenue_cents), icon: 'mdi-cash-check', sub: 'Somente atendimentos concluídos' },
     { title: 'Faturamento previsto', value: formatBRL(s.expected_revenue_cents), icon: 'mdi-cash-clock', sub: 'Pendentes e confirmados' },
     { title: 'Taxa de ausência', value: formatPercent(s.no_show_rate), icon: 'mdi-account-cancel-outline',
       sub: s.no_show_rate === null ? 'Sem atendimentos finalizados' : `${s.by_status.no_show} ausência(s)` },
-    { title: 'Clientes atendidos', value: s.unique_clients, icon: 'mdi-account-multiple-outline', sub: 'Clientes diferentes no período' },
+    { title: 'Clientes atendidos', value: s.unique_clients, icon: 'mdi-account-multiple-outline', sub: 'Com atendimento concluído' },
     { title: 'Clientes novos', value: s.new_clients, icon: 'mdi-account-plus-outline', sub: 'Cadastrados no período' },
   ]
 })

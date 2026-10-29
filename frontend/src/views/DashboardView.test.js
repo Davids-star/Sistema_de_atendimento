@@ -10,7 +10,7 @@ import DashboardView from './DashboardView.vue'
 
 const norm = (s) => s.replace(/ /g, ' ').replace(/\s+/g, ' ')
 const SUMMARY = {
-  date_from: '2029-03-01', date_to: '2029-03-31', total_appointments: 8,
+  date_from: '2029-03-01', date_to: '2029-03-31', total_appointments: 8, scheduled_appointments: 7,
   by_status: { pending: 1, confirmed: 1, cancelled: 1, completed: 4, no_show: 1 },
   revenue_cents: 15500, expected_revenue_cents: 6000, no_show_rate: 0.2, unique_clients: 2, new_clients: 2,
   top_services: [{ service_id: 1, name: 'Corte', count: 3, revenue_cents: 12500 }],
@@ -98,6 +98,37 @@ describe('DashboardView', () => {
       expect(norm(w.text())).toContain('Toque ou passe o mouse')
       await chart.findAll('.col')[4].trigger('click')                        // 05/03
       expect(norm(w.text())).toContain('05/03: R$ 70,00')
+    })
+  })
+
+  describe('cancelados e clientes atendidos', () => {
+    const card = (w, title) => [...w.findAll('.kpi')].find((k) => k.text().includes(title))
+
+    it('o cartão "Agendamentos" não soma os cancelados e informa quantos foram', async () => {
+      respond()
+      const w = await render()
+      const k = norm(card(w, 'Agendamentos').text())
+      expect(k).toContain('7')                       // 8 no total - 1 cancelado
+      expect(k).toContain('4 concluídos')
+      expect(k).toContain('1 cancelado(s)')
+      expect(k).not.toMatch(/\b8\b/)
+    })
+
+    it('sem cancelados, o texto não menciona cancelamentos', async () => {
+      api.mockImplementation(async (path) => {
+        if (path === '/dashboard/summary') return { ...SUMMARY, scheduled_appointments: 8, by_status: { ...SUMMARY.by_status, cancelled: 0 } }
+        if (path === '/dashboard/appointments-by-day') return DAYS
+        if (path === '/dashboard/revenue') return REVENUE
+        return []
+      })
+      expect(norm(card(await render(), 'Agendamentos').text())).not.toContain('cancelado')
+    })
+
+    it('"Clientes atendidos" explica que só conta atendimento concluído', async () => {
+      respond()
+      const k = norm(card(await render(), 'Clientes atendidos').text())
+      expect(k).toContain('2'); expect(k).toContain('Com atendimento concluído')
+      expect(k).not.toContain('Clientes diferentes no período')
     })
   })
 })

@@ -41,6 +41,9 @@ class Appointment(Base):
     price_cents: Mapped[int]  # preço no momento do agendamento (histórico não muda se o serviço mudar)
     source: Mapped[str] = mapped_column(String(20), default="admin", server_default="admin")
     notes: Mapped[str | None] = mapped_column(Text)
+    # Quem cancelou e quando (ex.: "Maria Souza (cliente, pelo Telegram)" ou "Ana (painel)"). Só preenchido em cancelados.
+    cancelled_by: Mapped[str | None] = mapped_column(String(120))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Conversa do bot que criou o agendamento (nulo = criado pelo painel). Quem não confirmou o telefone só enxerga
     # e cancela os agendamentos que ele mesmo marcou nesta conversa.
     conversation_id: Mapped[int | None] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), index=True)

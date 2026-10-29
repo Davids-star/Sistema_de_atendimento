@@ -10,7 +10,7 @@ from app.models import AdminUser, Appointment
 from app.models.appointment import ACTIVE_STATUSES
 from app.schemas.appointment import AppointmentCreate, AppointmentOut, AppointmentResult, AppointmentUpdate
 from app.services import appointments as svc
-from app.services import client_notify
+from app.services import client_notify, owner_notify
 from app.services.availability import day_bounds
 
 # Todas as rotas de agendamento exigem o administrador (o WhatsApp usará o serviço direto, com strict=True).
@@ -89,6 +89,8 @@ def _action(action: str):
         db.refresh(appt)
         if action == "cancel":   # cancelado PELO PAINEL: avisa a cliente (cancelamento feito por ela no bot não passa por aqui)
             background.add_task(client_notify.notify_cancelled, appt.id)
+            if not admin.is_owner:   # o dono sabe o que ele mesmo cancelou; os demais usuários geram aviso para ele
+                background.add_task(owner_notify.notify_owner_cancellation, appt.id)
         return appt
     endpoint.__name__ = f"{action}_appointment"
     return endpoint

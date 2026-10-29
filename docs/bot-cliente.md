@@ -72,3 +72,17 @@ Funcionam pelo Telegram, para quem já conversou com o bot (o sistema não tem c
 - Ajustes no `.env`: `REMINDER_HOURS_BEFORE` (4), `ARRIVE_EARLY_MINUTES` (20), `REMINDER_QUIET_START_HOUR` (21), `REMINDER_QUIET_END_HOUR` (7).
 
 No WhatsApp, mensagens que o sistema inicia fora da janela de 24 horas exigem modelos aprovados pela Meta; isso entra na etapa do WhatsApp.
+
+## Cancelamentos: quem cancelou e aviso ao dono
+- Todo cancelamento guarda **quem cancelou e quando** (ex.: *Maria Souza (cliente, pelo Telegram)* ou *Ana (painel)*). Aparece em vermelho no cartão
+  do agendamento cancelado, na aba Agendamentos, e fica na trilha de auditoria.
+- O **dono é avisado** (e-mail e, se estiver configurado, Telegram) quando:
+  - a **cliente cancela pelo bot**; ou
+  - **outro usuário do painel** (não o dono) cancela. Quando o próprio dono cancela, não há aviso.
+  O aviso traz cliente, celular, serviço, horário, **quem cancelou** e quando.
+- Quando o cancelamento é feito **pelo painel**, a **cliente** também é avisada pelo bot (com botão para marcar outro horário).
+
+## Números do dashboard
+- **Agendamentos**: o que está/foi agendado, **sem os cancelados** (o texto abaixo informa quantos foram cancelados).
+- **Clientes atendidos**: só quem teve ao menos um atendimento **concluído** no período. Cancelado, ausente, pendente e confirmado não contam.
+- **Clientes novos**: pessoas **cadastradas** no período (ainda não significa que foram atendidas).

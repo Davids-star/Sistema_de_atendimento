@@ -148,6 +148,9 @@ const openEdit = (a) => { editing.value = a; dialog.value = true }
         </div>
         <div class="phone num">{{ formatPhone(a.client_phone) }}</div>
         <div v-if="a.notes" class="notes">“{{ a.notes }}”</div>
+        <div v-if="a.status === 'cancelled'" class="cancelled-by">
+          Cancelado por <strong>{{ a.cancelled_by || 'não informado' }}</strong><span v-if="a.cancelled_at"> · {{ formatDateTime(a.cancelled_at) }}</span>
+        </div>
       </div>
     </div>
     <div v-if="actionsOf(a).length || canEdit(a)" class="actions">
@@ -212,6 +215,7 @@ const openEdit = (a) => { editing.value = a; dialog.value = true }
 .client { font-weight: 600; font-size: 1.02rem; }
 .service { margin-top: 3px; font-size: 0.92rem; }
 .phone { font-size: 0.8rem; opacity: 0.6; margin-top: 2px; }
+.cancelled-by { margin-top: 6px; font-size: 0.8rem; color: rgb(var(--v-theme-error)); }
 .notes { margin-top: 6px; font-size: 0.82rem; font-style: italic; opacity: 0.75; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
 

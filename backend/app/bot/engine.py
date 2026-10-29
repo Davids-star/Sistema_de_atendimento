@@ -446,7 +446,11 @@ def _do_cancel(db: Session, conv: Conversation, arg: str) -> list[Reply]:
     if appt is None:
         return [Reply(texts.CANNOT_CANCEL, _menu_buttons())]
     try:
-        appt_service.change_status(db, None, appt.id, "cancel")
+        who = _client(db, conv)
+        by = f"{who.name if who else 'cliente'} (cliente, pelo {conv.channel.capitalize()})"
+        appt_service.change_status(db, None, appt.id, "cancel", by=by)
     except appt_service.AppointmentError:
         return [Reply(texts.CANNOT_CANCEL, _menu_buttons())]
+    db.commit()   # garante o cancelamento gravado antes de avisar em segundo plano
+    run_in_background(owner_notify.notify_owner_cancellation, appt.id)
     return [Reply(texts.CANCELLED, _menu_buttons())]

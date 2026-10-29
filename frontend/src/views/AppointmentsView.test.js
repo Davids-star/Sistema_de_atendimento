@@ -97,6 +97,30 @@ describe('AppointmentsView', () => {
   })
 })
 
+describe('AppointmentsView: quem cancelou', () => {
+  it('mostra quem cancelou e quando, em vermelho, no cartão cancelado', async () => {
+    backend([appt({ status: 'cancelled', cancelled_by: 'Maria Souza (cliente, pelo Telegram)', cancelled_at: '2099-03-04T20:36:00Z' })])
+    await mountView(AppointmentsView)
+    const t = bodyText()
+    expect(t).toContain('Cancelado por Maria Souza (cliente, pelo Telegram)')
+    expect(t).toContain('04/03/2099 17:36')                                 // 20:36Z = 17:36 em São Paulo
+    expect(document.querySelector('.cancelled-by')).not.toBeNull()
+  })
+
+  it('cancelado antigo sem autor registrado mostra "não informado"', async () => {
+    backend([appt({ status: 'cancelled', cancelled_by: null, cancelled_at: null })])
+    await mountView(AppointmentsView)
+    expect(bodyText()).toContain('Cancelado por não informado')
+  })
+
+  it('só os cancelados mostram essa linha', async () => {
+    backend([appt({ id: 1, status: 'confirmed' }), appt({ id: 2, status: 'pending' }), appt({ id: 3, status: 'completed' })])
+    await mountView(AppointmentsView)
+    expect(document.querySelector('.cancelled-by')).toBeNull()
+    expect(bodyText()).not.toContain('Cancelado por')
+  })
+})
+
 describe('AppointmentsView: ver o que está marcado', () => {
   const tomorrow = (h) => new Date(Date.now() + 86400000 + h * 3600000).toISOString()
   const dayAfter = (h) => new Date(Date.now() + 2 * 86400000 + h * 3600000).toISOString()

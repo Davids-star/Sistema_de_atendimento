@@ -17,6 +17,8 @@ class AppointmentOut(BaseModel):
     price_cents: int
     source: str
     notes: str | None
+    cancelled_by: str | None = None
+    cancelled_at: datetime | None = None
     created_at: datetime
 
 

@@ -161,7 +161,8 @@ def update_appointment(db: Session, admin: AdminUser, appointment_id: int, chang
     return appt, warnings
 
 
-def change_status(db: Session, admin: AdminUser | None, appointment_id: int, action: str) -> Appointment:
+def change_status(db: Session, admin: AdminUser | None, appointment_id: int, action: str, by: str | None = None) -> Appointment:
+    """`by` descreve quem fez a ação quando não é um usuário do painel (ex.: "Maria (cliente, pelo Telegram)")."""
     allowed_from, target = TRANSITIONS[action]
     appt = get_locked(db, appointment_id)
     if appt.status not in allowed_from:
@@ -169,5 +170,10 @@ def change_status(db: Session, admin: AdminUser | None, appointment_id: int, act
     if action in ONLY_AFTER_START and appt.starts_at > _now():
         raise AppointmentError("Só é possível registrar conclusão/ausência depois do início do horário")
     old, appt.status = appt.status, target
-    audit.record(db, admin, action, "appointment", appt.id, {"from": old, "to": target})
+    changes = {"from": old, "to": target}
+    if action == "cancel":
+        appt.cancelled_by = by or (f"{admin.name} (painel)" if admin else "sistema")
+        appt.cancelled_at = _now()
+        changes["by"] = appt.cancelled_by
+    audit.record(db, admin, action, "appointment", appt.id, changes)
     return appt

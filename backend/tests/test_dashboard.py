@@ -105,3 +105,34 @@ def test_period_validation(client, auth):
     for params in bad:
         assert client.get(f"{URL}/summary", params=params, headers=auth).status_code == 422
     assert client.get(f"{URL}/revenue", params={"group_by": "ano"}, headers=auth).status_code == 422
+
+
+def test_attended_clients_counts_only_those_with_a_completed_service(client, auth, db):
+    """Quem só cancelou, faltou ou ainda está pendente/confirmado não foi atendido."""
+    svc = Service(name="Corte", price_cents=4000, duration_minutes=30)
+    people = {k: Client(name=k, phone=f"55119000000{i}") for i, k in enumerate(["atendida", "cancelou", "faltou", "pendente", "confirmada", "mista"])}
+    db.add(svc)
+    db.add_all(people.values())
+    db.flush()
+    plan = [("atendida", "completed", 9), ("cancelou", "cancelled", 10), ("faltou", "no_show", 11), ("pendente", "pending", 12),
+            ("confirmada", "confirmed", 13), ("mista", "cancelled", 14), ("mista", "completed", 15), ("atendida", "completed", 16)]
+    for who, status, hour in plan:
+        start = at(12, hour - 9)
+        db.add(Appointment(client_id=people[who].id, service_id=svc.id, starts_at=start, ends_at=start + timedelta(minutes=30),
+                           status=status, price_cents=4000))
+    db.flush()
+    s = client.get(f"{URL}/summary", params={"date_from": "2029-03-12", "date_to": "2029-03-12"}, headers=auth).json()
+    assert s["unique_clients"] == 2                                          # só "atendida" e "mista" (que teve um concluído)
+    assert s["total_appointments"] == 8 and s["scheduled_appointments"] == 6   # cancelados fora do "agendados"
+
+
+def test_attended_clients_is_zero_when_nobody_was_attended(client, auth, db):
+    svc = Service(name="Corte", price_cents=4000, duration_minutes=30)
+    cli = Client(name="So cancelou", phone="5511900000099")
+    db.add_all([svc, cli])
+    db.flush()
+    db.add(Appointment(client_id=cli.id, service_id=svc.id, starts_at=at(12, 0), ends_at=at(12, 0) + timedelta(minutes=30),
+                       status="cancelled", price_cents=4000))
+    db.flush()
+    s = client.get(f"{URL}/summary", params={"date_from": "2029-03-12", "date_to": "2029-03-12"}, headers=auth).json()
+    assert s["unique_clients"] == 0 and s["scheduled_appointments"] == 0
