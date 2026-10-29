@@ -48,3 +48,5 @@ general = SlidingWindow()
 login_failures = SlidingWindow()
 # Pedidos de redefinição de senha (para ninguém usar o sistema para encher a caixa de e-mail de alguém).
 reset_requests = SlidingWindow()
+# Cadastros novos e reenvios de confirmação (evita criar contas em massa e encher caixas de e-mail).
+signups = SlidingWindow()

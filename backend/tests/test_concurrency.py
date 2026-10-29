@@ -33,7 +33,9 @@ def test_simultaneous_bookings_same_slot_only_one_wins():
     _cleanup()
     try:
         with SessionLocal() as s:
-            s.add(AdminUser(email=EMAIL, name="T", password_hash=hash_password(PASSWORD)))
+            now = datetime.now(timezone.utc)
+            s.add(AdminUser(email=EMAIL, name="T", password_hash=hash_password(PASSWORD),
+                            email_verified_at=now, approved_at=now, is_owner=True))
             s.add(Service(name="TESTE-CONCORRENCIA", price_cents=1000, duration_minutes=30))
             s.commit()
             sid = s.scalar(select(Service.id).where(Service.name == "TESTE-CONCORRENCIA"))

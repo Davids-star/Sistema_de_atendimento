@@ -206,7 +206,8 @@ def test_change_password_guessing_is_rate_limited(client, admin, auth):
 
 def test_google_only_admin_can_set_a_first_password(client, db):
     from app.core.security import create_access_token
-    only_google = AdminUser(email="g@teste.com", name="G", password_hash=None)
+    now = datetime.now(timezone.utc)
+    only_google = AdminUser(email="g@teste.com", name="G", password_hash=None, email_verified_at=now, approved_at=now)
     db.add(only_google)
     db.flush()
     headers = {"Authorization": f"Bearer {create_access_token(only_google.id)}"}

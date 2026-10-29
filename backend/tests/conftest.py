@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 
 from app.core.config import settings
@@ -25,6 +27,7 @@ def reset_rate_limits():
     rate_limit.general.clear()
     rate_limit.login_failures.clear()
     rate_limit.reset_requests.clear()
+    rate_limit.signups.clear()
 
 
 @pytest.fixture
@@ -48,7 +51,9 @@ def client(db):
 
 @pytest.fixture
 def admin(db):
-    user = AdminUser(email=ADMIN_EMAIL, name="Dono", password_hash=hash_password(ADMIN_PASSWORD))
+    now = datetime.now(timezone.utc)
+    user = AdminUser(email=ADMIN_EMAIL, name="Dono", password_hash=hash_password(ADMIN_PASSWORD),
+                     email_verified_at=now, approved_at=now, is_owner=True)
     db.add(user)
     db.flush()
     return user

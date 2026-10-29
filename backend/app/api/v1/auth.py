@@ -1,21 +1,24 @@
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin
+from app.api.deps import get_current_user
 from app.core import rate_limit
 from app.core.config import settings
 from app.core.middleware import client_ip
-from app.core.security import DUMMY_HASH, create_access_token, password_version, verify_password
+from app.core.security import DUMMY_HASH, create_access_token, hash_password, password_version, verify_password
 from app.db.session import get_db
 from app.models import AdminUser
 from app.schemas.auth import (
     AdminOut, AuthConfig, ChangePasswordRequest, ForgotPasswordRequest, GoogleLoginRequest,
-    LoginRequest, ResetPasswordRequest, TokenResponse,
+    LoginRequest, ProfileUpdate, RegisterRequest, ResendVerificationRequest, ResetPasswordRequest, TokenResponse,
+    VerifyEmailRequest,
 )
-from app.services import audit, mailer, password_reset
+from app.services import audit, email_verification, mailer, owner_notify, password_reset
+from app.services.clients import normalize_phone
 from app.services.google_auth import verify_google_token
 
 logger = logging.getLogger("app.auth")
@@ -55,23 +58,46 @@ def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
         rate_limit.login_failures.hit(f"ip:{ip}", window)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "E-mail ou senha incorretos")
     rate_limit.login_failures.clear(f"email:{email}")
+    if not admin.email_verified:
+        # Só chega aqui quem acertou a senha, então dizer isso não revela nada a um estranho.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Confirme seu e-mail antes de entrar. Procure o link na sua caixa de entrada.")
     return TokenResponse(access_token=create_access_token(admin.id, password_version(admin)))
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(_: AdminUser = Depends(get_current_admin)):
+def logout(_: AdminUser = Depends(get_current_user)):
     # O token é stateless: o logout real é o frontend descartá-lo. O token expira sozinho.
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=AdminOut)
-def me(admin: AdminUser = Depends(get_current_admin)):
-    return admin
+def me(user: AdminUser = Depends(get_current_user)):
+    return user
+
+
+@router.patch("/me", response_model=AdminOut)
+def update_me(data: ProfileUpdate, db: Session = Depends(get_db), user: AdminUser = Depends(get_current_user)):
+    """Dados do próprio perfil. É aqui que quem entrou com Google informa o celular."""
+    changes = data.model_dump(exclude_unset=True)
+    if any(v is None for v in changes.values()):
+        raise HTTPException(422, "Campos não podem ser nulos")
+    if "phone" in changes:
+        try:
+            changes["phone"] = normalize_phone(changes["phone"])
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+    if "name" in changes:
+        changes["name"] = changes["name"].strip()
+    for key, value in changes.items():
+        setattr(user, key, value)
+    audit.record(db, user, "profile_update", "admin_user", user.id, {"fields": sorted(changes)})
+    db.commit()
+    return user
 
 
 @router.post("/google", response_model=TokenResponse)
-def login_google(data: GoogleLoginRequest, request: Request, db: Session = Depends(get_db)):
-    """Entrar com Google. Só funciona para um administrador JÁ cadastrado: nunca cria contas."""
+def login_google(data: GoogleLoginRequest, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)):
+    """Entrar com Google. Conta nova nasce SEM acesso ao painel: o dono precisa liberar (e o celular, informado)."""
     if not settings.google_client_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Login com Google não está configurado")
     ip = client_ip(request)
@@ -93,15 +119,28 @@ def login_google(data: GoogleLoginRequest, request: Request, db: Session = Depen
     sub, email = claims["sub"], claims["email"].lower()
     admin = db.scalar(select(AdminUser).where(AdminUser.google_sub == sub))
     if admin is None:
-        # Primeiro acesso com Google: liga a conta Google ao administrador que tem este e-mail.
         admin = db.scalar(select(AdminUser).where(AdminUser.email == email))
-        if admin is None or admin.google_sub:  # e-mail desconhecido, ou já ligado a OUTRA conta Google
-            reject("Esta conta Google não tem acesso ao painel")
-        admin.google_sub = sub
-        audit.record(db, admin, "google_link", "admin_user", admin.id)
+        if admin is None:
+            # Primeiro acesso de quem não criou conta: cria uma, com e-mail já confirmado pelo Google,
+            # mas SEM acesso ao painel até o dono liberar.
+            name = (claims.get("name") or email.split("@")[0]).strip()
+            admin = AdminUser(email=email, name=name, password_hash=None, google_sub=sub,
+                              email_verified_at=datetime.now(timezone.utc), signup_ip=ip)
+            db.add(admin)
+            db.flush()
+            audit.record(db, admin, "google_signup", "admin_user", admin.id)
+        elif admin.google_sub:  # este e-mail já está ligado a OUTRA conta Google
+            reject("Este e-mail já está ligado a outra conta Google")
+        else:
+            admin.google_sub = sub   # liga a conta Google à conta existente com este e-mail
+            if not admin.email_verified:
+                admin.email_verified_at = datetime.now(timezone.utc)   # o Google acabou de provar o e-mail
+            audit.record(db, admin, "google_link", "admin_user", admin.id)
     if not admin.is_active:
-        reject("Esta conta Google não tem acesso ao painel")
+        reject("Esta conta está desativada")
     db.commit()
+    if not admin.approved:
+        background.add_task(owner_notify.notify_owner_new_user, admin.id)   # ignora se já avisou antes
     return TokenResponse(access_token=create_access_token(admin.id, password_version(admin)))
 
 
@@ -140,6 +179,8 @@ def reset_password(data: ResetPasswordRequest, request: Request, db: Session = D
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Link inválido ou expirado. Peça um novo.")
     row, admin = found
     password_reset.set_password(db, admin, data.new_password)
+    if not admin.email_verified:
+        admin.email_verified_at = datetime.now(timezone.utc)   # receber o link já prova que o e-mail é dela
     audit.record(db, admin, "password_reset", "admin_user", admin.id)
     db.commit()
     rate_limit.login_failures.clear(f"email:{admin.email}")  # se estava bloqueado por tentativas, libera
@@ -148,7 +189,7 @@ def reset_password(data: ResetPasswordRequest, request: Request, db: Session = D
 
 @router.post("/change-password", response_model=TokenResponse)
 def change_password(data: ChangePasswordRequest, db: Session = Depends(get_db),
-                    admin: AdminUser = Depends(get_current_admin)):
+                    admin: AdminUser = Depends(get_current_user)):
     """Troca a senha de quem está logado. Devolve um token novo, pois os anteriores deixam de valer."""
     window = settings.login_lockout_minutes * 60
     key = f"email:{admin.email}"
@@ -163,3 +204,76 @@ def change_password(data: ChangePasswordRequest, db: Session = Depends(get_db),
     audit.record(db, admin, "password_change", "admin_user", admin.id)
     db.commit()
     return TokenResponse(access_token=create_access_token(admin.id, password_version(admin)))
+
+
+# ---------- Cadastro e confirmação de e-mail ----------
+REGISTER_MESSAGE = "Enviamos um e-mail para confirmar seu cadastro. Abra o link da mensagem para continuar."
+
+
+@router.post("/register", status_code=status.HTTP_202_ACCEPTED)
+def register(data: RegisterRequest, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)):
+    """Cria a conta. Ela só entra depois de confirmar o e-mail e de o dono liberar o acesso.
+
+    A resposta é sempre a mesma, exista o e-mail ou não (não revela quem já tem conta)."""
+    ip = client_ip(request)
+    window = settings.login_lockout_minutes * 60
+    _check_lockout([f"ip:{ip}"], ip, window, rate_limit.signups)
+    rate_limit.signups.hit(f"ip:{ip}", window)
+    try:
+        phone = normalize_phone(data.phone)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    email = data.email.lower()
+
+    user = db.scalar(select(AdminUser).where(AdminUser.email == email))
+    if user is None:
+        user = AdminUser(email=email, name=data.name.strip(), phone=phone, password_hash=hash_password(data.password),
+                         signup_ip=ip)
+        db.add(user)
+        db.flush()
+        audit.record(db, user, "signup", "admin_user", user.id)
+    elif not user.email_verified and user.is_active:
+        # Cadastro nunca confirmado: vale o ÚLTIMO envio. Assim, quem se cadastrou antes com o e-mail
+        # de outra pessoa não consegue ficar com a conta quando a dona real confirmar.
+        user.name, user.phone, user.password_hash = data.name.strip(), phone, hash_password(data.password)
+        user.signup_ip = ip   # vale o último envio, inclusive de onde ele veio
+        user.password_changed_at = datetime.now(timezone.utc)
+    else:
+        background.add_task(mailer.send_already_registered_email, email)
+        return {"detail": REGISTER_MESSAGE}
+    raw = email_verification.issue_token(db, user)
+    background.add_task(mailer.send_verification_email, email, raw)
+    return {"detail": REGISTER_MESSAGE}
+
+
+@router.post("/verify-email", status_code=status.HTTP_204_NO_CONTENT)
+def verify_email(data: VerifyEmailRequest, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)):
+    ip = client_ip(request)
+    window = settings.login_lockout_minutes * 60
+    _check_lockout([f"ip:{ip}"], ip, window)
+    user = email_verification.consume(db, data.token)
+    if user is None:
+        logger.warning("confirmacao de e-mail com link invalido (ip=%s)", ip)
+        rate_limit.login_failures.hit(f"ip:{ip}", window)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Link inválido ou expirado. Peça um novo.")
+    audit.record(db, user, "email_verified", "admin_user", user.id)
+    db.commit()
+    if not user.approved:
+        background.add_task(owner_notify.notify_owner_new_user, user.id)   # e-mail real confirmado: agora vale avisar o dono
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
+def resend_verification(data: ResendVerificationRequest, request: Request, background: BackgroundTasks,
+                        db: Session = Depends(get_db)):
+    email, ip = data.email.lower(), client_ip(request)
+    window = settings.login_lockout_minutes * 60
+    keys = [f"email:{email}", f"ip:{ip}"]
+    _check_lockout(keys, ip, window, rate_limit.signups)
+    for key in keys:
+        rate_limit.signups.hit(key, window)
+    user = db.scalar(select(AdminUser).where(AdminUser.email == email, AdminUser.is_active))
+    if user and not user.email_verified:
+        raw = email_verification.issue_token(db, user)
+        background.add_task(mailer.send_verification_email, email, raw)
+    return {"detail": REGISTER_MESSAGE}

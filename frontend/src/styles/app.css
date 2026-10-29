@@ -92,3 +92,7 @@ body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiase
 
 /* Espaço no fim da página no celular para o botão flutuante não cobrir o último item */
 @media (max-width: 600px) { .page { padding-bottom: 96px !important; } }
+
+/* Contador de pendências no menu lateral */
+.nav-badge { min-width: 22px; padding: 1px 7px; border-radius: 11px; font-size: 0.75rem; font-weight: 700; text-align: center;
+             background: #d7ae62; color: #1a1408; }

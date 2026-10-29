@@ -4,21 +4,25 @@ import { useRouter } from 'vue-router'
 import { useDisplay, useTheme } from 'vuetify'
 import { api, setToken } from '../api'
 import { saveTheme } from '../plugins/vuetify'
+import { loadUser, resetSession, session } from '../session'
 import { toast } from '../utils/notify'
 
 const router = useRouter()
 const theme = useTheme()
 const { mdAndUp } = useDisplay()
 const drawer = ref(mdAndUp.value)
-const admin = ref(null)
+const admin = computed(() => session.user)
+const pendingUsers = ref(0)   // só o dono vê: pessoas aguardando liberação
 
 const nav = [
   { title: 'Dashboard', icon: 'mdi-view-dashboard-outline', to: { name: 'dashboard' }, exact: true },
   { title: 'Agendamentos', icon: 'mdi-calendar-month-outline', to: { name: 'appointments' } },
   { title: 'Serviços', icon: 'mdi-content-cut', to: { name: 'services' } },
   { title: 'Clientes', icon: 'mdi-account-multiple-outline', to: { name: 'clients' } },
+  { title: 'Usuários', icon: 'mdi-shield-account-outline', to: { name: 'users' }, ownerOnly: true },
   { title: 'Configurações', icon: 'mdi-cog-outline', to: { name: 'settings' } },
 ]
+const visibleNav = computed(() => nav.filter((i) => !i.ownerOnly || admin.value?.is_owner))
 
 const isDark = computed(() => theme.current.value.dark)
 function toggleTheme() {
@@ -29,12 +33,16 @@ function toggleTheme() {
 const initial = computed(() => (admin.value?.name ?? '?').trim().charAt(0).toUpperCase())
 
 onMounted(async () => {
-  try { admin.value = await api('/auth/me') } catch { /* 401 já redireciona para o login */ }
+  const user = await loadUser()   // 401 já redireciona para o login
+  if (user?.is_owner) {
+    try { pendingUsers.value = (await api('/users', { params: { status: 'pending_approval' } })).length } catch { /* só um aviso */ }
+  }
 })
 
 async function logout() {
   try { await api('/auth/logout', { method: 'POST' }) } catch { /* o token é descartado de qualquer forma */ }
   setToken(null)
+  resetSession()
   router.push({ name: 'login' })
 }
 </script>
@@ -49,8 +57,10 @@ async function logout() {
       </div>
     </div>
     <v-list nav>
-      <v-list-item v-for="item in nav" :key="item.title" :to="item.to" :exact="item.exact" :prepend-icon="item.icon"
-                   :title="item.title" @click="!mdAndUp && (drawer = false)" />
+      <v-list-item v-for="item in visibleNav" :key="item.title" :to="item.to" :exact="item.exact" :prepend-icon="item.icon"
+                   :title="item.title" @click="!mdAndUp && (drawer = false)">
+        <template v-if="item.ownerOnly && pendingUsers" #append><span class="nav-badge">{{ pendingUsers }}</span></template>
+      </v-list-item>
     </v-list>
     <template #append>
       <div class="sidebar-foot">Agendamentos pelo WhatsApp e pelo painel</div>

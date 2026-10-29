@@ -1,7 +1,7 @@
 from fastapi import APIRouter, FastAPI
 
 from app.api import health
-from app.api.v1 import appointments, auth, clients, dashboard, schedule, services
+from app.api.v1 import appointments, auth, clients, dashboard, schedule, services, users
 from fastapi.responses import JSONResponse
 
 from app.core.logging import setup_logging
@@ -32,6 +32,7 @@ api_v1.include_router(clients.router)
 api_v1.include_router(schedule.router)
 api_v1.include_router(appointments.router)
 api_v1.include_router(dashboard.router)
+api_v1.include_router(users.router)
 app.include_router(api_v1)
 
 

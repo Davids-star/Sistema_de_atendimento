@@ -6,7 +6,8 @@ import vuetify from './plugins/vuetify'
 import './styles/app.css' // depois do Vuetify, para os nossos estilos prevalecerem
 import router from './router'
 import { setUnauthorizedHandler } from './api'
+import { resetSession } from './session'
 
-setUnauthorizedHandler(() => router.push({ name: 'login' }))
+setUnauthorizedHandler(() => { resetSession(); router.push({ name: 'login' }) })
 
 createApp(App).use(vuetify).use(router).mount('#app')

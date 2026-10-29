@@ -7,6 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from datetime import datetime, timezone  # noqa: E402
+
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
 from app.models import AdminUser  # noqa: E402
@@ -19,7 +21,10 @@ def main():
     if password and (len(password) < 10 or password != getpass.getpass("Repita a senha: ")):
         sys.exit("Senha curta demais ou não confere.")
     with SessionLocal() as db:
-        db.add(AdminUser(email=email, name=name, password_hash=hash_password(password) if password else None))
+        now = datetime.now(timezone.utc)
+        # Criado por quem tem acesso ao servidor: já nasce confirmado, liberado e dono.
+        db.add(AdminUser(email=email, name=name, password_hash=hash_password(password) if password else None,
+                         email_verified_at=now, approved_at=now, is_owner=True))
         db.commit()
     print("Administrador criado.")
 

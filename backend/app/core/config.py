@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     # Redefinição de senha por e-mail
     frontend_url: str = "http://localhost:5173"   # usado para montar o link enviado por e-mail
     reset_token_minutes: int = 30
+    # Aviso de novos cadastros ao dono, com Telegram. Token do @BotFather; chat id do dono (veja docs/telegram.md).
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    # Localização aproximada por IP. {ip} é substituído. Se falhar, a mensagem diz "indisponível".
+    geoip_url: str = "https://ipapi.co/{ip}/json/"
+    verify_token_hours: int = 24   # validade do link de confirmação de e-mail
     mail_mode: str = "off"        # off = não envia | console = imprime no terminal (só para testes) | smtp = envia de verdade
     smtp_host: str = ""
     smtp_port: int = 587

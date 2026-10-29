@@ -47,3 +47,29 @@ def send_reset_email(to: str, raw_token: str) -> None:
         f"{link}\n\n"
         "Se não foi você, ignore este e-mail: a sua senha continua a mesma.",
     )
+
+
+def send_verification_email(to: str, raw_token: str) -> None:
+    link = f"{settings.frontend_url.rstrip('/')}/confirmar-email?token={raw_token}"
+    send_mail(
+        to,
+        "Confirme seu e-mail - Painel da Barbearia",
+        "Recebemos um cadastro no painel da barbearia com este e-mail.\n\n"
+        f"Para confirmar que ele é seu, abra o link abaixo (vale por {settings.verify_token_hours} horas e só pode ser usado uma vez):\n\n"
+        f"{link}\n\n"
+        "Depois de confirmar, o dono da barbearia precisa liberar o seu acesso.\n"
+        "Se não foi você, ignore este e-mail: sem a confirmação, essa conta não consegue entrar nem ver nada.",
+    )
+
+
+def send_already_registered_email(to: str) -> None:
+    """Quando alguém tenta se cadastrar com um e-mail que já tem conta. Evita revelar isso na tela."""
+    link = f"{settings.frontend_url.rstrip('/')}/login"
+    send_mail(
+        to,
+        "Você já tem uma conta - Painel da Barbearia",
+        "Alguém tentou criar uma conta no painel da barbearia com este e-mail, mas ele já está cadastrado.\n\n"
+        f"Se foi você, é só entrar: {link}\n"
+        "Se esqueceu a senha, use a opção \"Esqueci minha senha\" na tela de entrada.\n\n"
+        "Se não foi você, ignore este e-mail.",
+    )

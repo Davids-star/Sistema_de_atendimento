@@ -59,12 +59,37 @@ def test_email_is_case_insensitive(client, admin, monkeypatch):
     assert client.post(URL, json={"credential": "x"}).status_code == 200
 
 
-def test_unknown_google_account_is_rejected_and_nothing_is_created(client, admin, db, monkeypatch):
-    fake_google(monkeypatch, sub="999", email="estranho@gmail.com")
+def test_unknown_google_account_gets_a_pending_account_with_no_access(client, admin, db, monkeypatch):
+    fake_google(monkeypatch, sub="999", email="novo@gmail.com", name="Novo Usuário")
     r = client.post(URL, json={"credential": "x"})
-    assert r.status_code == 401
-    assert db.scalar(select(AdminUser).where(AdminUser.email == "estranho@gmail.com")) is None
-    assert db.scalar(select(AdminUser).where(AdminUser.google_sub == "999")) is None
+    assert r.status_code == 200
+    user = db.scalar(select(AdminUser).where(AdminUser.email == "novo@gmail.com"))
+    assert user.google_sub == "999" and user.name == "Novo Usuário" and user.password_hash is None
+    assert user.email_verified and not user.approved and not user.is_owner and user.phone is None
+
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    me = client.get("/api/v1/auth/me", headers=headers).json()
+    assert me["status"] == "pending_approval" and me["approved"] is False
+    # ...mas não enxerga nada da barbearia
+    for path in ("/api/v1/clients", "/api/v1/appointments", "/api/v1/dashboard/summary", "/api/v1/settings"):
+        assert client.get(path, headers=headers).status_code == 403, path
+
+
+def test_google_signup_without_a_name_uses_the_email_prefix(client, db, monkeypatch):
+    fake_google(monkeypatch, sub="888", email="joao.silva@gmail.com")
+    assert client.post(URL, json={"credential": "x"}).status_code == 200
+    assert db.scalar(select(AdminUser).where(AdminUser.email == "joao.silva@gmail.com")).name == "joao.silva"
+
+
+def test_google_login_confirms_the_email_of_an_unconfirmed_signup(client, db, monkeypatch):
+    pending = AdminUser(email="ana@gmail.com", name="Ana", password_hash=hash_password("senha-qualquer-123"))
+    db.add(pending)
+    db.flush()
+    assert not pending.email_verified
+    fake_google(monkeypatch, sub="777", email="ana@gmail.com")
+    assert client.post(URL, json={"credential": "x"}).status_code == 200
+    db.refresh(pending)
+    assert pending.email_verified and pending.google_sub == "777"
 
 
 def test_unverified_email_is_rejected(client, admin, monkeypatch):
