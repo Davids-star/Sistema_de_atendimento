@@ -137,6 +137,7 @@ onMounted(async () => {
         <v-alert type="success" variant="tonal" class="mb-4" icon="mdi-email-check-outline">
           Enviamos um e-mail para <strong>{{ form.email }}</strong>. Abra o link para confirmar o cadastro (vale 24 horas).
           Depois, o dono da barbearia precisa liberar o seu acesso. Confira também a caixa de spam.
+          Se este e-mail já tinha uma conta, a mensagem avisa e explica como entrar (não há link de confirmação).
         </v-alert>
         <a href="#" class="link" @click.prevent="resend(form.email)">Não chegou? Reenviar e-mail</a>
       </template>
