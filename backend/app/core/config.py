@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     reminder_max_attempts: int = 10         # tentativas (1 por minuto) se o envio falhar
     bot_booking_days: int = 14        # quantos dias à frente o bot oferece
     bot_session_minutes: int = 30     # conversa parada por mais tempo volta ao menu
+    # Push no app Android (FCM). Caminho do JSON da conta de serviço do Firebase (nunca no Git). Vazio = push desligado.
+    fcm_service_account_file: str = ""
+    push_max_age_minutes: int = 10   # não envia push de aviso mais velho que isso (ex.: ao ligar o push depois)
     verify_token_hours: int = 24   # validade do link de confirmação de e-mail
     mail_mode: str = "off"        # off = não envia | console = imprime no terminal (só para testes) | smtp = envia de verdade
     smtp_host: str = ""

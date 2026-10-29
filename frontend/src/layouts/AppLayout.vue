@@ -7,6 +7,7 @@ import { BRAND } from '../brand'
 import { saveTheme } from '../plugins/vuetify'
 import NotificationBell from '../components/NotificationBell.vue'
 import { resetInbox, startPolling, stopPolling } from '../notifications'
+import { setupPush, unregisterDevice } from '../push'
 import { loadUser, resetSession, session } from '../session'
 import { toast } from '../utils/notify'
 
@@ -38,6 +39,7 @@ const initial = computed(() => (admin.value?.name ?? '?').trim().charAt(0).toUpp
 onMounted(async () => {
   startPolling()   // avisos do sino enquanto o painel estiver aberto
   const user = await loadUser()   // 401 já redireciona para o login
+  if (user) setupPush({ router })   // no app Android: pede permissão e registra o aparelho para receber avisos com o app fechado
   if (user?.is_owner) {
     try { pendingUsers.value = (await api('/users', { params: { status: 'pending_approval' } })).length } catch { /* só um aviso */ }
   }
@@ -46,6 +48,7 @@ onMounted(async () => {
 onBeforeUnmount(stopPolling)
 
 async function logout() {
+  await unregisterDevice()   // antes de apagar o login: precisa estar autenticado
   try { await api('/auth/logout', { method: 'POST' }) } catch { /* o token é descartado de qualquer forma */ }
   setToken(null)
   resetSession()

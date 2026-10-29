@@ -32,7 +32,9 @@ export function detailToMessage(detail, status) {
 }
 
 export async function api(path, { method = 'GET', params, body } = {}) {
-  const url = new URL(`/api/v1${path}`, window.location.origin)
+  // No navegador a API está no mesmo endereço (o Vite/servidor encaminha). No app Android não: defina VITE_API_URL
+  // (ex.: https://agenda.seudominio.com.br) ao gerar o app.
+  const url = new URL(`${import.meta.env.VITE_API_URL || ''}/api/v1${path}`, window.location.origin)
   for (const [k, v] of Object.entries(params ?? {})) {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v)
   }
