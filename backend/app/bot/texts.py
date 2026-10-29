@@ -55,7 +55,18 @@ CHOOSE_DAY = "Para qual dia?"
 NO_DAYS = "Não encontrei horários livres nos próximos dias. Tente novamente mais tarde ou fale diretamente com a gente."
 CHOOSE_TIME = "Qual horário?"
 ASK_PHONE = ("Para confirmar o agendamento preciso do seu número de celular. "
-             "Toque no botão abaixo para compartilhar (é o jeito mais seguro).")
+             "Toque no botão \"📱 Compartilhar meu número\" abaixo.\n\n"
+             "Não apareceu? No Telegram do computador ele fica atrás do ícone de teclado, ao lado do campo de mensagem. "
+             "No celular aparece direto.")
+PHONE_BUTTON_ONLY = ("Por segurança, só aceito o número pelo botão \"📱 Compartilhar meu número\" (digitar não confirma que "
+                     "o número é seu). Se o botão não aparece, abra o Telegram no celular ou fale diretamente com a gente.")
+ASK_TYPED_PHONE = ("Pode digitar o seu celular com DDD (ex.: 11 99999-8888). "
+                   "Obs.: sem a confirmação pelo botão, não consigo mostrar nem cancelar agendamentos por aqui.")
+BAD_PHONE = "Não entendi esse número. Digite com DDD, por exemplo: 11 99999-8888."
+PHONE_ALREADY_REGISTERED = ("Esse número já tem cadastro. Para continuar sem digitar, toque em \"📱 Compartilhar meu número\" "
+                            "(confirma que é você) ou fale diretamente com a gente.")
+VERIFY_TO_MANAGE = ("Para ver ou cancelar seus agendamentos preciso confirmar que o número é seu. "
+                    "Toque em \"📱 Compartilhar meu número\".")
 BAD_CONTACT = "Esse contato não é o seu. Preciso do SEU número: toque no botão para compartilhar o seu."
 ASK_NAME = "Como você se chama? (nome e sobrenome, se preferir)"
 BAD_NAME = "Não entendi o nome. Pode escrever de novo? (de 2 a 80 letras)"

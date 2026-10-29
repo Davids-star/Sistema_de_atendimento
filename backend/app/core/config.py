@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     geoip_url: str = "https://ipapi.co/{ip}/json/"
     # Bot do CLIENTE (separado do bot de avisos do dono): token do @BotFather.
     customer_bot_token: str = ""
+    # SÓ PARA TESTES: aceita o telefone digitado no Telegram (sem confirmação). No WhatsApp o número já vem confirmado.
+    bot_allow_typed_phone: bool = False
     bot_booking_days: int = 14        # quantos dias à frente o bot oferece
     bot_session_minutes: int = 30     # conversa parada por mais tempo volta ao menu
     verify_token_hours: int = 24   # validade do link de confirmação de e-mail

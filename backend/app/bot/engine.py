@@ -146,7 +146,7 @@ def _route(db: Session, conv: Conversation, inc: Incoming) -> list[Reply]:
     if conv.state == "ask_name" and text:
         return _receive_name(db, conv, text)
     if conv.state == "ask_phone":
-        return [Reply(texts.ASK_PHONE, ask_contact=True)]
+        return _typed_phone(db, conv, text) if text else [Reply(texts.ASK_PHONE, ask_contact=True)]
     if conv.state == "ask_name":
         return [Reply(texts.ASK_NAME)]
     if conv.state == "idle":
@@ -169,7 +169,7 @@ def _bind_phone(db: Session, conv: Conversation, phone: str) -> None:
         phone = normalize_phone(phone)
     except ValueError:
         return
-    conv.phone = phone
+    conv.phone, conv.phone_verified = phone, True
     if conv.client_id is None:
         client = db.scalar(select(Client).where(Client.phone == phone))
         if client:
@@ -296,6 +296,22 @@ def _choose_time(db: Session, conv: Conversation, arg: str) -> list[Reply]:
     return [Reply(texts.ASK_PHONE, ask_contact=True)]
 
 
+def _typed_phone(db: Session, conv: Conversation, text: str) -> list[Reply]:
+    """Telefone DIGITADO (não confirmado). Só no modo de teste; permite agendar, mas nunca ver/cancelar."""
+    if not settings.bot_allow_typed_phone:
+        return [Reply(texts.PHONE_BUTTON_ONLY, ask_contact=True)]
+    try:
+        phone = normalize_phone(text)
+    except ValueError:
+        return [Reply(texts.BAD_PHONE)]
+    if db.scalar(select(Client.id).where(Client.phone == phone)):
+        # Ligar uma pessoa não confirmada a um cadastro existente exporia os dados de outra: só pelo botão.
+        return [Reply(texts.PHONE_ALREADY_REGISTERED, ask_contact=True)]
+    conv.phone, conv.phone_verified = phone, False
+    _set(conv, "ask_name")
+    return [Reply(texts.ASK_NAME)]
+
+
 def _after_identity(db: Session, conv: Conversation) -> list[Reply]:
     """Chamado quando o canal acabou de confirmar o telefone. Cliente conhecido segue; novo informa o nome."""
     if _client(db, conv):
@@ -312,6 +328,10 @@ def _receive_name(db: Session, conv: Conversation, text: str) -> list[Reply]:
     if not conv.phone:   # defesa: sem telefone confirmado não se cria cliente
         _set(conv, "ask_phone")
         return [Reply(texts.ASK_PHONE, ask_contact=True)]
+    if not conv.phone_verified and db.scalar(select(Client.id).where(Client.phone == conv.phone)):
+        conv.phone = None   # alguém cadastrou este número no meio do caminho: não ligar uma pessoa não confirmada a ele
+        _set(conv, "ask_phone")
+        return [Reply(texts.PHONE_ALREADY_REGISTERED, ask_contact=True)]
     client, _ = get_or_create_by_phone(db, conv.phone, name)
     conv.client_id = client.id
     _set(conv, "confirm")
@@ -353,7 +373,7 @@ def _confirm(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
 
 # ---------------------------------------------------------------- meus agendamentos / cancelar
 def _my_upcoming(db: Session, conv: Conversation) -> list[Appointment]:
-    if not conv.client_id:
+    if not conv.client_id or not conv.phone_verified:   # número só digitado não dá acesso a agendamentos
         return []
     return list(db.scalars(select(Appointment).where(
         Appointment.client_id == conv.client_id, Appointment.status.in_(ACTIVE_STATUSES), Appointment.starts_at > _now())
@@ -361,6 +381,8 @@ def _my_upcoming(db: Session, conv: Conversation) -> list[Appointment]:
 
 
 def _mine(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
+    if conv.client_id and not conv.phone_verified:
+        return [Reply(texts.VERIFY_TO_MANAGE, ask_contact=True)]
     items = _my_upcoming(db, conv)
     if not items:
         return [Reply(texts.NOTHING_BOOKED, _menu_buttons())]

@@ -462,3 +462,103 @@ def test_a_failing_background_task_never_breaks_the_client(db, caplog, monkeypat
     t = engine.run_in_background(boom)
     t.join(2)
     assert not t.is_alive()
+
+
+# ---------------------------------------------------------------- telefone digitado (modo de teste)
+@pytest.fixture
+def typed_ok(monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "bot_allow_typed_phone", True)
+
+
+def to_phone_step(c):
+    c.send("/start"); c.press("Agendar"); c.press("Manicure"); c.press(""); c.press(":")
+    assert c.last[0].ask_contact
+
+
+def test_the_phone_prompt_explains_where_the_button_is():
+    assert "Compartilhar meu número" in texts.ASK_PHONE and "ícone de teclado" in texts.ASK_PHONE and "celular" in texts.ASK_PHONE
+
+
+def test_typed_phone_is_refused_by_default_with_a_helpful_and_different_answer(db):
+    c = Chat(db)
+    to_phone_step(c)
+    first = c.last[0].text
+    r = c.send("11 97777-6666")
+    assert r[0].text != first and r[0].text == texts.PHONE_BUTTON_ONLY and r[0].ask_contact     # não repete a mesma resposta
+    assert c.conv().phone is None and c.conv().client_id is None
+
+
+def test_typed_phone_in_test_mode_lets_the_person_book(db, typed_ok):
+    c = Chat(db)
+    to_phone_step(c)
+    c.send("(11) 97777-6666")
+    assert c.text() == texts.ASK_NAME and c.conv().phone == "5511977776666" and c.conv().phone_verified is False
+    c.send("Maria Teste")
+    c.press("Confirmar")
+    assert "✅ Agendado!" in c.text()
+    appt = appointments(db)[0]
+    assert appt.client.name == "Maria Teste" and appt.source == "telegram"
+
+
+def test_typed_phone_never_gives_access_to_view_or_cancel(db, typed_ok):
+    c = Chat(db)
+    to_phone_step(c)
+    c.send("11 97777-6666"); c.send("Maria Teste"); c.press("Confirmar")
+    appt = appointments(db)[0]
+    r = c.send(data="mine")
+    assert r[0].text == texts.VERIFY_TO_MANAGE and r[0].ask_contact                              # pede a confirmação
+    for data in (f"cancel:{appt.id}", f"cancel_yes:{appt.id}"):
+        assert texts.CANNOT_CANCEL in c.send(data=data)[0].text
+    db.refresh(appt)
+    assert appt.status == "confirmed"
+
+
+def test_sharing_the_contact_later_unlocks_viewing_and_cancelling(db, typed_ok):
+    c = Chat(db)
+    to_phone_step(c)
+    c.send("11 97777-6666"); c.send("Maria Teste"); c.press("Confirmar")
+    c.send(phone="5511977776666")                                                                # agora confirmou pelo botão
+    assert c.conv().phone_verified is True
+    c.press("Meus horários")
+    assert "Seus próximos agendamentos" in c.text()
+
+
+def test_typed_phone_of_an_existing_client_is_refused(db, typed_ok):
+    victim = Client(name="Cliente Antiga", phone="5511977776666")
+    db.add(victim)
+    db.flush()
+    c = Chat(db)
+    to_phone_step(c)
+    r = c.send("(11) 97777-6666")
+    assert r[0].text == texts.PHONE_ALREADY_REGISTERED and r[0].ask_contact
+    assert c.conv().phone is None and c.conv().client_id is None
+
+
+def test_a_number_registered_in_the_middle_of_the_flow_is_not_linked_to_an_unverified_person(db, typed_ok):
+    c = Chat(db)
+    to_phone_step(c)
+    c.send("11 97777-6666")                                                                      # digitou um número livre
+    db.add(Client(name="Chegou Depois", phone="5511977776666"))                                  # ...e alguém o cadastrou agora
+    db.flush()
+    r = c.send("Impostora")
+    assert r[0].text == texts.PHONE_ALREADY_REGISTERED and c.conv().client_id is None and c.conv().state == "ask_phone"
+
+
+def test_invalid_typed_phones_are_refused(db, typed_ok):
+    c = Chat(db)
+    to_phone_step(c)
+    for bad in ["123", "abc", "+1 415 555 2671", "99999999999999999999"]:
+        assert c.send(bad)[0].text == texts.BAD_PHONE, bad
+    assert c.conv().phone is None
+
+
+def test_typed_phone_mode_is_off_by_default():
+    from app.core.config import Settings
+    assert Settings.model_fields["bot_allow_typed_phone"].default is False
+
+
+def test_whatsapp_numbers_are_always_verified(db):
+    c = Chat(db, "5511977776666", channel="whatsapp")
+    c.send("oi", phone=PHONE)
+    assert c.conv().phone_verified is True

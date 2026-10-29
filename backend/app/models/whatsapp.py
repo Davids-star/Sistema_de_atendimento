@@ -16,7 +16,10 @@ class Conversation(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     channel: Mapped[str] = mapped_column(String(20), default="whatsapp", server_default="whatsapp")
     external_id: Mapped[str | None] = mapped_column(String(64))   # id do chat no canal (no WhatsApp, o número)
-    phone: Mapped[str | None] = mapped_column(String(20))         # só quando o CANAL confirmou o número
+    phone: Mapped[str | None] = mapped_column(String(20))         # número informado nesta conversa
+    # True só quando o CANAL confirmou que o número é da pessoa (WhatsApp; contato compartilhado no Telegram).
+    # Número apenas digitado NÃO vale: permite agendar, mas não ver nem cancelar agendamentos.
+    phone_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"))
     state: Mapped[str] = mapped_column(String(40), default="idle", server_default="idle")
     context: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")  # dados do fluxo em andamento
