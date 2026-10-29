@@ -29,7 +29,8 @@ def day_label(day: date, today: date) -> str:
 
 # Rótulos de botões: até 20 caracteres (limite do WhatsApp), então já valem nos dois canais.
 BTN_BOOK = "💅 Agendar horário"
-BTN_MINE = "🗓 Meus horários"
+BTN_MINE = "🗓 Meus agendamentos"
+BTN_HOURS = "🕒 Horários de atend."
 BTN_MENU = "⬅️ Menu"
 BTN_CONFIRM = "✅ Confirmar"
 BTN_OTHER_TIME = "📅 Outro horário"
@@ -42,6 +43,45 @@ BTN_NO = "Não"
 def short(text: str, limit: int = 20) -> str:
     """Corta com reticências para caber no título de um botão."""
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+FULL_NAMES = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+
+
+def _span(first: int, last: int) -> str:
+    if first == last:
+        return FULL_NAMES[first]
+    if last - first == 1:
+        return f"{FULL_NAMES[first]} e {FULL_NAMES[last].lower()}"
+    short = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    return f"{short[first]} a {short[last].lower()}"
+
+
+def hours_summary(rows: list[tuple[int, str, str]]) -> str:
+    """rows = (dia da semana 0-6, início "09:00", fim "12:00"). Junta dias seguidos com o mesmo expediente.
+
+    Ex.: Seg a sex: 09:00–12:00 e 14:00–19:00 | Sábado: 09:00–16:00 | Domingo: fechado
+    """
+    by_day: dict[int, list[str]] = {d: [] for d in range(7)}
+    for day, start, end in sorted(rows):
+        by_day[day].append(f"{start}–{end}")
+    lines, day = [], 0
+    while day < 7:
+        end = day
+        while end + 1 < 7 and by_day[end + 1] == by_day[day]:
+            end += 1
+        label = _span(day, end)
+        lines.append(f"{label}: " + (" e ".join(by_day[day]) if by_day[day] else "fechado"))
+        day = end + 1
+    return "\n".join(lines)
+
+
+def hours_screen(summary: str | None, free_days: list[str]) -> str:
+    if not summary:
+        return "Os horários de atendimento ainda não foram cadastrados. Fale diretamente com a gente, por favor."
+    free = ("Próximos dias com horário livre: " + ", ".join(free_days) + ".") if free_days else \
+           "No momento não há horários livres nos próximos dias."
+    return f"🕒 Horários de atendimento\n\n{summary}\n\n{free}\nToque em \"Agendar horário\" para escolher o seu."
 
 
 def greeting(name: str | None) -> str:

@@ -18,7 +18,7 @@ from app.bot import texts
 from app.bot.types import Button, Incoming, Reply
 from app.core import rate_limit
 from app.core.config import settings
-from app.models import Appointment, Client, Conversation, Service, WhatsAppMessage
+from app.models import Appointment, BusinessHours, Client, Conversation, Service, WhatsAppMessage
 from app.models.appointment import ACTIVE_STATUSES
 from app.services import appointments as appt_service
 from app.services import owner_notify
@@ -28,6 +28,7 @@ from app.services.clients import get_or_create_by_phone, normalize_phone
 logger = logging.getLogger("app.bot")
 
 MENU_WORDS = {"/start", "/menu", "menu", "oi", "olá", "ola", "início", "inicio", "voltar", "recomeçar"}
+HOURS_WORDS = {"/horarios", "horarios", "horários", "horario", "horário", "agenda", "expediente", "funcionamento", "vagas"}
 MAX_TEXT = 200
 RATE_PER_MINUTE = 15
 TIMES_PER_PAGE = 7     # 7 horários + "Mais horários" + "Outro dia" + "Menu" = 10 opções (limite do WhatsApp)
@@ -44,7 +45,7 @@ def _today() -> date:
 
 
 def _menu_buttons() -> list[list[Button]]:
-    return [[Button(texts.BTN_BOOK, "book")], [Button(texts.BTN_MINE, "mine")]]
+    return [[Button(texts.BTN_BOOK, "book")], [Button(texts.BTN_HOURS, "hours")], [Button(texts.BTN_MINE, "mine")]]
 
 
 def run_in_background(fn, *args) -> threading.Thread:
@@ -134,10 +135,13 @@ def _route(db: Session, conv: Conversation, inc: Incoming) -> list[Reply]:
         _reset(conv)
         return [_menu(db, conv)]
 
+    if text.lower() in HOURS_WORDS and conv.state in ("idle", "choose_service"):
+        return _hours(db, conv, "")
+
     if inc.data:
         action, _, arg = inc.data.partition(":")
         handler = {"book": _book, "svc": _choose_service, "day": _choose_day, "time": _choose_time, "more": _more_times,
-                   "yes": _confirm, "back_days": _back_days, "mine": _mine, "cancel": _ask_cancel,
+                   "yes": _confirm, "back_days": _back_days, "mine": _mine, "hours": _hours, "cancel": _ask_cancel,
                    "cancel_yes": _do_cancel}.get(action)
         return handler(db, conv, arg) if handler else [Reply(texts.EXPIRED, _menu_buttons())]
 
@@ -188,6 +192,28 @@ def _current_step(db: Session, conv: Conversation) -> list[Reply]:
     if conv.state == "confirm":
         return _show_confirm(db, conv)
     return [_menu(db, conv)]
+
+
+# ---------------------------------------------------------------- horários de atendimento
+def _hours(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
+    """Mostra o expediente e os próximos dias com vaga, sem precisar escolher serviço nem agendar."""
+    _reset(conv)
+    rows = [(h.weekday, h.start_time.strftime("%H:%M"), h.end_time.strftime("%H:%M")) for h in db.scalars(select(BusinessHours))]
+    if not rows:
+        return [Reply(texts.hours_screen(None, []), [[Button(texts.BTN_MENU, "menu")]])]
+    # Vaga = existe algum horário para o serviço mais curto (o que "cabe" em mais lugares).
+    shortest = db.scalar(select(Service).where(Service.is_active).order_by(Service.duration_minutes, Service.id).limit(1))
+    free_days: list[str] = []
+    if shortest is not None:
+        today = _today()
+        for i in range(settings.bot_booking_days):
+            day = today + timedelta(days=i)
+            if slots_for_day(db, day, shortest):
+                free_days.append(texts.day_label(day, today))
+            if len(free_days) == 5:
+                break
+    return [Reply(texts.hours_screen(texts.hours_summary(rows), free_days),
+                  [[Button(texts.BTN_BOOK, "book")], [Button(texts.BTN_MENU, "menu")]])]
 
 
 # ---------------------------------------------------------------- agendar

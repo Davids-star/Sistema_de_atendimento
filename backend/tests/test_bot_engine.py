@@ -77,7 +77,7 @@ def appointments(db):
 def test_full_booking_for_a_new_client_on_telegram(db, studio):
     c = Chat(db)
     r = c.send("/start")
-    assert "assistente de agendamentos" in r[0].text and [b.data for b in c.buttons()] == ["book", "mine"]
+    assert "assistente de agendamentos" in r[0].text and [b.data for b in c.buttons()] == ["book", "hours", "mine"]
 
     c.press("Agendar")
     assert "Qual serviço" in c.text()
@@ -249,14 +249,14 @@ def test_names_with_markup_are_stored_as_plain_text(db):
 def test_list_and_cancel_my_appointment(db):
     c = Chat(db)
     book_until_confirm(c); c.send("Maria Souza"); c.press("Confirmar")
-    c.press("Meus horários")
+    c.press("Meus agendamentos")
     assert "Seus próximos agendamentos" in c.text() and "Manicure" in c.text() and "confirmado" in c.text()
     c.press("Cancelar 1")
     assert "Cancelar Manicure" in c.text()
     c.press("Sim, cancelar")
     assert c.text() == texts.CANCELLED
     assert appointments(db)[0].status == "cancelled"
-    c.press("Meus horários")
+    c.press("Meus agendamentos")
     assert texts.NOTHING_BOOKED in c.text()
     assert db.scalars(select(Appointment).where(Appointment.status == "cancelled")).first() is not None
 
@@ -309,7 +309,7 @@ def test_menu_words_reset_the_conversation_anywhere(db):
     book_until_confirm(c)
     c.send("menu")
     assert c.conv().state == "idle" and c.conv().context == {}
-    assert [b.data for b in c.buttons()] == ["book", "mine"]
+    assert [b.data for b in c.buttons()] == ["book", "hours", "mine"]
 
 
 def test_an_old_conversation_expires(db):
@@ -363,7 +363,7 @@ def test_every_button_fits_telegrams_64_byte_limit(db):
     book_until_confirm(c)
     c.send("Maria Souza")
     for step in (lambda: c.send("/start"), lambda: c.press("Agendar"), lambda: c.press("Manicure"), lambda: c.press(""),
-                 lambda: c.press(":"), lambda: c.press("Confirmar"), lambda: c.press("Meus horários")):
+                 lambda: c.press(":"), lambda: c.press("Confirmar"), lambda: c.press("Meus agendamentos")):
         step()
         seen += [b.data for b in c.buttons()]
     assert seen and all(len(d.encode()) <= 64 for d in seen), max(seen, key=len)
@@ -375,7 +375,7 @@ def walk_flow(c):
     screens = []
     for step in (lambda: c.send("/start"), lambda: c.press("Agendar"), lambda: c.press("Manicure"), lambda: c.press(""),
                  lambda: c.press(":"), lambda: c.send(phone=PHONE), lambda: c.send("Maria Souza"), lambda: c.press("Confirmar"),
-                 lambda: c.press("Meus horários"), lambda: c.press("Cancelar 1")):
+                 lambda: c.press("Meus agendamentos"), lambda: c.press("Cancelar 1")):
         step()
         screens.append(list(c.last))
     return screens
@@ -509,7 +509,7 @@ def test_typed_phone_sees_and_cancels_only_what_this_conversation_booked(db, typ
     c.send("11 97777-6666"); c.send("Maria Teste"); c.press("Confirmar")
     appt = appointments(db)[0]
     assert appt.conversation_id == c.conv().id                                   # o agendamento guarda quem o criou
-    c.press("Meus horários")
+    c.press("Meus agendamentos")
     assert "Seus próximos agendamentos" in c.text() and "Manicure" in c.text()   # ela VÊ o que marcou
     c.press("Cancelar 1"); c.press("Sim, cancelar")
     assert c.text() == texts.CANCELLED and db.get(Appointment, appt.id).status == "cancelled"
@@ -535,7 +535,7 @@ def test_a_typed_number_never_exposes_what_the_real_owner_books_later(db, typed_
         assert texts.CANNOT_CANCEL in attacker.send(data=data)[0].text
     db.refresh(hers[0])
     assert hers[0].status == "confirmed"
-    victim.press("Meus horários")
+    victim.press("Meus agendamentos")
     assert "Seus próximos agendamentos" in victim.text() and "Pedicure" in victim.text()   # e a dona vê o dela normalmente
 
 
@@ -565,7 +565,7 @@ def test_sharing_the_contact_later_unlocks_viewing_and_cancelling(db, typed_ok):
     c.send("11 97777-6666"); c.send("Maria Teste"); c.press("Confirmar")
     c.send(phone="5511977776666")                                                                # agora confirmou pelo botão
     assert c.conv().phone_verified is True
-    c.press("Meus horários")
+    c.press("Meus agendamentos")
     assert "Seus próximos agendamentos" in c.text()                                              # confirmado: vê todos os da cliente
 
 
@@ -607,3 +607,120 @@ def test_whatsapp_numbers_are_always_verified(db):
     c = Chat(db, "5511977776666", channel="whatsapp")
     c.send("oi", phone=PHONE)
     assert c.conv().phone_verified is True
+
+
+# ---------------------------------------------------------------- horários de atendimento
+def set_hours(db, rows):
+    db.execute(delete(BusinessHours))
+    from datetime import time
+    for day, start, end in rows:
+        db.add(BusinessHours(weekday=day, start_time=time(*start), end_time=time(*end)))
+    db.flush()
+
+
+def test_menu_has_three_clear_options_with_the_right_names(db):
+    c = Chat(db)
+    c.send("/start")
+    assert [(b.data, b.text) for b in c.buttons()] == [("book", "💅 Agendar horário"), ("hours", "🕒 Horários de atend."), ("mine", "🗓 Meus agendamentos")]
+
+
+def test_the_hours_screen_shows_the_studio_schedule_and_the_next_free_days(db):
+    set_hours(db, [(d, (9, 0), (12, 0)) for d in range(5)] + [(d, (14, 0), (19, 0)) for d in range(5)] + [(5, (9, 0), (16, 0))])
+    c = Chat(db)
+    c.send("/start"); c.press("Horários de atend.")
+    t = c.text()
+    assert "Horários de atendimento" in t
+    assert "Seg a sex: 09:00–12:00 e 14:00–19:00" in t and "Sábado: 09:00–16:00" in t and "Domingo: fechado" in t
+    assert "Próximos dias com horário livre:" in t
+    assert [b.data for b in c.buttons()] == ["book", "menu"]                       # dá para agendar direto dali
+    assert c.conv().state == "idle"
+
+
+def test_free_days_skip_closed_days_and_only_list_days_that_really_have_a_slot(db):
+    set_hours(db, [(5, (9, 0), (12, 0))])                                           # só aos sábados
+    c = Chat(db)
+    c.send("/start"); c.press("Horários de atend.")
+    line = next(l for l in c.text().splitlines() if l.startswith("Próximos dias"))
+    assert "sáb" in line and not any(d in line for d in ("seg", "ter", "qua", "qui", "sex", "dom"))
+
+
+def test_the_hours_screen_says_so_when_nothing_is_free(db):
+    set_hours(db, [(d, (9, 0), (12, 0)) for d in range(7)])
+    db.execute(update(Service).values(is_active=False))                              # sem serviço ativo, não há como agendar
+    c = Chat(db)
+    c.send("/start"); c.press("Horários de atend.")
+    assert "No momento não há horários livres" in c.text() and "Segunda a domingo" not in c.text()
+
+
+def test_the_hours_screen_without_a_schedule_registered(db):
+    db.execute(delete(BusinessHours))
+    c = Chat(db)
+    c.send("/start"); c.press("Horários de atend.")
+    assert "ainda não foram cadastrados" in c.text() and [b.data for b in c.buttons()] == ["menu"]
+
+
+def test_busy_times_are_not_counted_as_free_days(db):
+    set_hours(db, [(d, (9, 0), (10, 0)) for d in range(7)])                          # uma única vaga de 45 min por dia
+    c = Chat(db)
+    c.send("/start"); c.press("Horários de atend.")
+    first = c.text()
+    service = db.scalar(select(Service).where(Service.name == "Manicure"))
+    other = Client(name="Outra", phone="5511900001111")
+    db.add(other)
+    db.flush()
+    from app.services.availability import slots_for_day
+    today = datetime.now(timezone.utc).astimezone(__import__("app.services.availability", fromlist=["TZ"]).TZ).date()
+    for offset in range(0, 3):
+        for slot in slots_for_day(db, today + timedelta(days=offset), service)[:2]:
+            appt_service.create_appointment(db, admin=None, client_id=other.id, client_phone=None, client_name=None, service_id=service.id,
+                                            starts_at=slot, notes=None, status="confirmed", source="admin", strict=False)
+    c.send("/start"); c.press("Horários de atend.")
+    assert c.text() != first                                                         # os dias lotados saíram da lista
+
+
+@pytest.mark.parametrize("word", ["horários", "Horarios", "/horarios", "agenda", "expediente", "vagas"])
+def test_typing_the_word_also_opens_the_hours_screen(db, word):
+    set_hours(db, [(0, (9, 0), (18, 0))])
+    c = Chat(db)
+    c.send("/start")
+    r = c.send(word)
+    assert "Horários de atendimento" in r[0].text
+
+
+def test_the_word_agenda_does_not_hijack_a_name_being_typed(db, typed_ok):
+    """Se a pessoa está digitando o nome, "Agenda" é um nome, não um pedido de horários."""
+    c = Chat(db)
+    to_phone_step(c)
+    c.send("11 97777-6666")
+    assert c.conv().state == "ask_name"
+    c.send("agenda")
+    assert c.conv().state != "idle" and "Horários de atendimento" not in c.text()
+
+
+def test_the_hours_screen_never_reveals_other_clients_or_block_reasons(db):
+    set_hours(db, [(d, (9, 0), (18, 0)) for d in range(7)])
+    other = Client(name="Cliente Secreta", phone="5511911112222")
+    db.add(other)
+    db.flush()
+    c = Chat(db)
+    c.send("/start"); c.press("Horários de atend.")
+    assert "Secreta" not in c.text() and "5511911112222" not in c.text()
+
+
+def test_the_new_button_labels_fit_the_whatsapp_limit(db):
+    from app.bot.types import MAX_BUTTON_TEXT
+    set_hours(db, [(0, (9, 0), (18, 0))])
+    c = Chat(db)
+    for step in (lambda: c.send("/start"), lambda: c.press("Horários de atend.")):
+        step()
+        assert all(len(b.text) <= MAX_BUTTON_TEXT for b in c.buttons()), [b.text for b in c.buttons()]
+
+
+def test_hours_summary_groups_days_and_handles_edge_cases():
+    sa = texts.hours_summary
+    assert sa([(d, "08:00", "20:00") for d in range(7)]) == "Seg a dom: 08:00–20:00"
+    assert sa([(0, "09:00", "18:00"), (1, "09:00", "18:00"), (3, "10:00", "16:00")]).splitlines() == [
+        "Segunda e terça: 09:00–18:00", "Quarta: fechado", "Quinta: 10:00–16:00", "Sex a dom: fechado"]
+    assert sa([(2, "14:00", "18:00"), (2, "09:00", "12:00")]).splitlines() == [                                    # intervalos fora de ordem
+        "Segunda e terça: fechado", "Quarta: 09:00–12:00 e 14:00–18:00", "Qui a dom: fechado"]
+    assert sa([]).splitlines() == ["Seg a dom: fechado"]

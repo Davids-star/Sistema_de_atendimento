@@ -16,7 +16,14 @@ backend/customer_bot.py  programa que mantém o bot do cliente rodando
 Para o WhatsApp, o futuro adaptador ficará em `channels/whatsapp.py`, sem mexer no cérebro.
 
 ## Como a conversa funciona
-Menu → **Agendar** → serviço → dia (só dias com horário livre) → horário → [celular] → [nome] → resumo → **Confirmar**.
+**Menu da cliente (3 opções):**
+- **💅 Agendar horário**: o fluxo abaixo.
+- **🕒 Horários de atendimento**: mostra o seu expediente (ex.: *Seg a sex: 09:00–12:00 e 14:00–19:00 · Sábado: 09:00–16:00 · Domingo: fechado*)
+  e os **próximos dias que ainda têm vaga**, sem precisar escolher serviço. Também abre se a cliente digitar *horários*, *agenda*, *vagas* ou *expediente*.
+  Os horários vêm do que você cadastrou em Configurações; dias lotados ou bloqueados não aparecem como livres.
+- **🗓 Meus agendamentos**: o que ela marcou (e cancelamento).
+
+Fluxo de agendar: Menu → **Agendar** → serviço → dia (só dias com horário livre) → horário → [celular] → [nome] → resumo → **Confirmar**.
 Também há **Meus agendamentos** (com cancelamento). Tudo por botões; texto livre só para o nome.
 
 - Cliente conhecida (mesmo celular) nunca digita nada: o bot já sabe quem é.
