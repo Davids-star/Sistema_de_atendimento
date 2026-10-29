@@ -1,7 +1,7 @@
 <script setup>
 // Gráfico de barras simples (sem biblioteca externa).
 // items: [{ label: '05/03', value: 123, tip: 'texto ao passar o mouse' }]
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   items: { type: Array, required: true },
@@ -10,6 +10,8 @@ const props = defineProps({
   format: { type: Function, default: (v) => String(v) },   // formata o valor máximo do eixo
 })
 
+const active = ref(null)   // barra tocada/sob o mouse: o valor aparece escrito acima do gráfico (no celular não existe "passar o mouse")
+
 const max = computed(() => Math.max(1, ...props.items.map((i) => i.value)))
 // Mostra poucos rótulos no eixo para não embolar quando há muitos dias.
 const labelEvery = computed(() => Math.max(1, Math.ceil(props.items.length / 8)))
@@ -17,10 +19,15 @@ const labelEvery = computed(() => Math.max(1, Math.ceil(props.items.length / 8))
 
 <template>
   <div v-if="items.length" class="wrap">
-    <div class="axis-max num">{{ format(max) }}</div>
+    <div class="caption" aria-live="polite">
+      <strong v-if="active" class="num">{{ active.tip }}</strong>
+      <span v-else class="hint">Toque ou passe o mouse em uma barra para ver o valor</span>
+      <span class="axis-max num">máx. {{ format(max) }}</span>
+    </div>
     <div class="chart" :style="{ height: `${height}px` }" role="img">
       <div class="gridlines" aria-hidden="true"><i /><i /><i /></div>
-      <div v-for="(item, i) in items" :key="i" class="col" :title="item.tip">
+      <div v-for="(item, i) in items" :key="i" class="col" :title="item.tip" tabindex="0" :class="{ on: active === item }"
+           @mouseenter="active = item" @focus="active = item" @click="active = item" @mouseleave="active = null" @blur="active = null">
         <div class="bar-area">
           <div class="bar" :style="{ height: `${(item.value / max) * 100}%`, background: `rgb(var(--v-theme-${color}))` }"
                :class="{ empty: item.value === 0 }" />
@@ -34,7 +41,11 @@ const labelEvery = computed(() => Math.max(1, Math.ceil(props.items.length / 8))
 
 <style scoped>
 .wrap { position: relative; }
-.axis-max { font-size: 11px; color: rgba(var(--v-theme-on-surface), 0.5); margin-bottom: 4px; }
+.caption { display: flex; align-items: baseline; gap: 12px; min-height: 22px; margin-bottom: 6px; font-size: 0.85rem; }
+.caption .hint { color: rgba(var(--v-theme-on-surface), 0.5); }
+.axis-max { margin-left: auto; font-size: 11px; color: rgba(var(--v-theme-on-surface), 0.5); white-space: nowrap; }
+.col { cursor: pointer; outline: none; }
+.col.on .bar { opacity: 1; filter: brightness(1.08); }
 .chart { position: relative; display: flex; align-items: stretch; gap: 3px; }
 .gridlines { position: absolute; left: 0; right: 0; top: 0; bottom: 18px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
 .gridlines i { display: block; border-top: 1px dashed rgba(var(--v-theme-on-surface), 0.1); }

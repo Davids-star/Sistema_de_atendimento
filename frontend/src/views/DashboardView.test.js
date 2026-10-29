@@ -79,4 +79,66 @@ describe('DashboardView', () => {
     api.mockRejectedValue(Object.assign(new Error('Sem conexão com o servidor.'), { status: 0 }))
     expect(norm((await render()).text())).toContain('Sem conexão com o servidor.')
   })
+
+  describe('hoje, tabela dia a dia e valor no gráfico', () => {
+    const rows = (w) => [...w.findAll('.daily tbody tr')].map((tr) => norm(tr.text()))
+
+    it('o atalho Hoje pede só o dia de hoje', async () => {
+      respond()
+      const w = await render()
+      api.mockClear(); respond()
+      const hoje = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Hoje')
+      hoje.click(); await flushPromises()
+      const p = api.mock.calls.find(([path]) => path === '/dashboard/summary')[1].params
+      expect(p.date_from).toBe(p.date_to)
+      expect(p.date_from).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    })
+
+    it('mostra a tabela dia a dia só com os dias que tiveram movimento, com o faturamento de cada um', async () => {
+      respond()
+      const w = await render()
+      expect(norm(w.text())).toContain('Dia a dia')
+      expect(rows(w)).toHaveLength(1)                                       // só o dia 05 teve movimento
+      expect(rows(w)[0]).toContain('05/03/2029'); expect(rows(w)[0]).toContain('2')        // 2 agendamentos
+      expect(rows(w)[0]).toContain('R$ 70,00')                                              // faturamento do dia
+      expect(norm(w.find('.daily tfoot').text())).toContain('R$ 70,00')                    // total
+    })
+
+    it('o interruptor mostra também os dias sem movimento', async () => {
+      respond()
+      const w = await render()
+      expect(rows(w)).toHaveLength(1)
+      await w.find('.daily').element.closest('.v-card').querySelector('input[type="checkbox"]').click()
+      await flushPromises()
+      expect(rows(w)).toHaveLength(31)
+    })
+
+    it('explica que só atendimentos concluídos entram no faturamento', async () => {
+      respond()
+      expect(norm((await render()).text())).toContain('Concluído')
+    })
+
+    it('tocar numa barra escreve o valor do dia acima do gráfico', async () => {
+      respond()
+      const w = await render()
+      const chart = w.findAll('.chart')[1]                                   // gráfico de faturamento
+      expect(norm(w.text())).toContain('Toque ou passe o mouse')
+      await chart.findAll('.col')[4].trigger('click')                        // 05/03
+      expect(norm(w.text())).toContain('05/03: R$ 70,00')
+    })
+
+    it('em período longo a tabela vira "Mês a mês"', async () => {
+      api.mockImplementation(async (path) => {
+        if (path === '/dashboard/summary') return SUMMARY
+        if (path === '/dashboard/appointments-by-day') return []
+        if (path === '/dashboard/revenue') return { group_by: 'month', total_cents: 20000, points: [
+          { period: '2029-01', revenue_cents: 8000, completed_count: 2 }, { period: '2029-02', revenue_cents: 12000, completed_count: 3 }] }
+        return []
+      })
+      const w = await render()
+      expect(norm(w.text())).toContain('Mês a mês')
+      expect(rows(w)).toEqual(expect.arrayContaining([expect.stringContaining('01/2029'), expect.stringContaining('R$ 120,00')]))
+      expect(norm(w.find('.daily tfoot').text())).toContain('R$ 200,00')
+    })
+  })
 })

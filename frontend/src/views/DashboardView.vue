@@ -3,9 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
 import BarChart from '../components/BarChart.vue'
 import { formatBRL, formatDayMonth, formatPercent } from '../utils/format'
+import { formatDayLong, weekdayShort } from '../utils/datetime'
 import { daysBetween, presetRange } from '../utils/period'
 
 const PRESETS = [
+  { value: 'today', title: 'Hoje' },
+  { value: 'this_week', title: 'Esta semana' },
   { value: 'this_month', title: 'Este mês' },
   { value: 'last_month', title: 'Mês passado' },
   { value: 'last_30', title: 'Últimos 30 dias' },
@@ -60,6 +63,23 @@ async function load() {
   }
 }
 onMounted(load)
+
+// ---- tabela dia a dia (ou mês a mês, em períodos longos) ----
+const showEmptyDays = ref(false)
+const isDaily = computed(() => revenue.value?.group_by !== 'month')
+const tableRows = computed(() => {
+  if (!revenue.value) return []
+  if (!isDaily.value) {
+    return revenue.value.points.map((p) => ({ key: p.period, label: `${p.period.slice(5)}/${p.period.slice(0, 4)}`,
+      short: `${p.period.slice(5)}/${p.period.slice(2, 4)}`, total: null, done: p.completed_count, cents: p.revenue_cents }))
+  }
+  const byPeriod = new Map(revenue.value.points.map((p) => [p.period, p.revenue_cents]))
+  return byDay.value
+    .map((d) => ({ key: d.date, label: formatDayLong(d.date), short: `${weekdayShort(d.date)} ${formatDayMonth(d.date)}`, total: d.total, done: d.by_status.completed ?? 0, cents: byPeriod.get(d.date) ?? 0 }))
+    .filter((r) => showEmptyDays.value || r.total > 0 || r.cents > 0)
+})
+const tableTotals = computed(() => tableRows.value.reduce((t, r) => ({
+  total: t.total + (r.total ?? 0), done: t.done + r.done, cents: t.cents + r.cents }), { total: 0, done: 0, cents: 0 }))
 
 const cards = computed(() => {
   const s = summary.value
@@ -163,6 +183,44 @@ const revenueItems = computed(() => {
       </v-card>
     </div>
 
+    <v-card class="pa-5 mt-4">
+      <div class="d-flex flex-wrap align-center ga-2 mb-3">
+        <div class="section-title mr-auto">{{ isDaily ? 'Dia a dia' : 'Mês a mês' }}</div>
+        <v-switch v-if="isDaily" v-model="showEmptyDays" label="Mostrar dias sem movimento" density="compact" hide-details color="primary" />
+      </div>
+      <v-table v-if="tableRows.length" density="comfortable" class="daily">
+        <thead>
+          <tr>
+            <th>{{ isDaily ? 'Dia' : 'Mês' }}</th>
+            <th class="text-right"><span class="long">Agendamentos</span><span class="short">Agend.</span></th>
+            <th class="text-right"><span class="long">Concluídos</span><span class="short">Concl.</span></th>
+            <th class="text-right"><span class="long">Faturamento</span><span class="short">Valor</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in tableRows" :key="r.key">
+            <td class="font-weight-medium"><span class="long">{{ r.label }}</span><span class="short">{{ r.short }}</span></td>
+            <td class="text-right num">{{ r.total ?? '—' }}</td>
+            <td class="text-right num">{{ r.done }}</td>
+            <td class="text-right num">{{ formatBRL(r.cents) }}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr class="totals">
+            <td>Total</td>
+            <td class="text-right num">{{ isDaily ? tableTotals.total : '—' }}</td>
+            <td class="text-right num">{{ tableTotals.done }}</td>
+            <td class="text-right num">{{ formatBRL(tableTotals.cents) }}</td>
+          </tr>
+        </tfoot>
+      </v-table>
+      <div v-else class="text-body-medium text-medium-emphasis">Nenhum movimento neste período.</div>
+      <p class="text-body-small text-medium-emphasis mt-3">
+        O faturamento soma só os atendimentos marcados como <strong>Concluído</strong>. Agendamentos pendentes ou confirmados
+        ainda não entram.
+      </p>
+    </v-card>
+
     <div class="grid grid-2 mt-4">
       <v-card class="pa-5">
         <div class="section-title mb-4">Situação dos agendamentos</div>
@@ -191,6 +249,15 @@ const revenueItems = computed(() => {
 </template>
 
 <style scoped>
+.daily .short { display: none; }
+@media (max-width: 600px) {
+  /* Celular: rótulos curtos e menos espaço lateral, para as 4 colunas (inclusive o valor) caberem sem rolar */
+  .daily .long { display: none; }
+  .daily .short { display: inline; }
+  .daily :deep(th), .daily :deep(td) { padding: 0 6px !important; font-size: 0.8rem; white-space: nowrap; }
+  .daily :deep(th) { font-size: 0.68rem !important; letter-spacing: 0.03em !important; }
+}
+.daily tfoot .totals td { font-weight: 700; border-top: 2px solid rgba(var(--v-theme-on-surface), 0.15); }
 /* seletor de período no celular ocupa a largura toda */
 .period-select { flex: 1 1 100%; }
 .kpi { padding: 20px 22px; display: flex; flex-direction: column; gap: 6px; }

@@ -35,6 +35,17 @@ describe('period', () => {
     expect(r).toEqual({ from: '2029-02-14', to: '2029-03-15' })
     expect(daysBetween(r.from, r.to)).toBe(30)
   })
+  it('hoje e esta semana (segunda a domingo)', () => {
+    expect(presetRange('today', today)).toEqual({ from: '2029-03-15', to: '2029-03-15' })
+    expect(presetRange('this_week', today)).toEqual({ from: '2029-03-12', to: '2029-03-18' })   // quinta 15/03
+  })
+  it('semana: segunda, domingo e virada de mês/ano', () => {
+    expect(presetRange('this_week', new Date(2029, 2, 12))).toEqual({ from: '2029-03-12', to: '2029-03-18' })   // segunda
+    expect(presetRange('this_week', new Date(2029, 2, 18))).toEqual({ from: '2029-03-12', to: '2029-03-18' })   // domingo
+    expect(presetRange('this_week', new Date(2029, 3, 1))).toEqual({ from: '2029-03-26', to: '2029-04-01' })    // atravessa o mês
+    expect(presetRange('this_week', new Date(2030, 0, 1))).toEqual({ from: '2029-12-31', to: '2030-01-06' })    // atravessa o ano
+    expect(daysBetween(...Object.values(presetRange('this_week', today)))).toBe(7)
+  })
   it('daysBetween', () => {
     expect(daysBetween('2029-03-01', '2029-03-31')).toBe(31)
     expect(daysBetween('2029-03-05', '2029-03-05')).toBe(1)
