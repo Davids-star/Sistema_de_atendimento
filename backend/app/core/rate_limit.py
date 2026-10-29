@@ -50,3 +50,5 @@ login_failures = SlidingWindow()
 reset_requests = SlidingWindow()
 # Cadastros novos e reenvios de confirmação (evita criar contas em massa e encher caixas de e-mail).
 signups = SlidingWindow()
+# Mensagens por conversa nos bots (evita que alguém sobrecarregue o sistema pelo chat).
+bot_messages = SlidingWindow()

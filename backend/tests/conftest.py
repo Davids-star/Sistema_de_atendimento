@@ -28,6 +28,7 @@ def reset_rate_limits():
     rate_limit.login_failures.clear()
     rate_limit.reset_requests.clear()
     rate_limit.signups.clear()
+    rate_limit.bot_messages.clear()
 
 
 @pytest.fixture

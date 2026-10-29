@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
     # Localização aproximada por IP. {ip} é substituído. Se falhar, a mensagem diz "indisponível".
     geoip_url: str = "https://ipapi.co/{ip}/json/"
+    # Bot do CLIENTE (separado do bot de avisos do dono): token do @BotFather.
+    customer_bot_token: str = ""
+    bot_booking_days: int = 14        # quantos dias à frente o bot oferece
+    bot_session_minutes: int = 30     # conversa parada por mais tempo volta ao menu
     verify_token_hours: int = 24   # validade do link de confirmação de e-mail
     mail_mode: str = "off"        # off = não envia | console = imprime no terminal (só para testes) | smtp = envia de verdade
     smtp_host: str = ""

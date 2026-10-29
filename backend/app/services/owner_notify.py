@@ -60,3 +60,18 @@ def notify_owner_new_user(user_id: int) -> None:
                 db.commit()
     except Exception:
         logger.exception("falha ao avisar o dono sobre novo cadastro")
+
+
+def notify_owner_booking(appointment_id: int, via: str = "bot") -> None:
+    """Avisa o dono (Telegram) de um agendamento feito pelo cliente no chat. Sem Telegram configurado, não faz nada."""
+    if not telegram.enabled():
+        return
+    from app.models import Appointment
+    with SessionLocal() as db:
+        appt = db.get(Appointment, appointment_id)
+        if appt is None:
+            return
+        local = appt.starts_at.astimezone()
+        text = (f"Novo agendamento pelo {via}\n\n{appt.service.name}\n{appt.client.name} · {_format_phone(appt.client.phone)}\n"
+                f"{local:%d/%m/%Y às %H:%M}")
+        telegram.send_message(settings.telegram_chat_id, text)

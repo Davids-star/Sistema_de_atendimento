@@ -20,7 +20,7 @@ class Appointment(Base):
             "status IN ('pending','confirmed','cancelled','completed','no_show')",
             name="ck_appointments_status",
         ),
-        CheckConstraint("source IN ('admin','whatsapp')", name="ck_appointments_source"),
+        CheckConstraint("source IN ('admin','whatsapp','telegram')", name="ck_appointments_source"),
         # Garantia final contra sobreposição, mesmo com requisições simultâneas:
         # o próprio PostgreSQL rejeita dois agendamentos ativos que se cruzem.
         ExcludeConstraint(
