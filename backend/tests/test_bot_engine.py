@@ -480,7 +480,9 @@ def test_the_phone_prompt_explains_where_the_button_is():
     assert "Compartilhar meu número" in texts.ASK_PHONE and "ícone de teclado" in texts.ASK_PHONE and "celular" in texts.ASK_PHONE
 
 
-def test_typed_phone_is_refused_by_default_with_a_helpful_and_different_answer(db):
+def test_typed_phone_is_refused_by_default_with_a_helpful_and_different_answer(db, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "bot_allow_typed_phone", False)   # fixa o valor: o .env de quem testa pode ter o modo de teste ligado
     c = Chat(db)
     to_phone_step(c)
     first = c.last[0].text

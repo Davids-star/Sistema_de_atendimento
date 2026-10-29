@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     customer_bot_token: str = ""
     # SÓ PARA TESTES: aceita o telefone digitado no Telegram (sem confirmação). No WhatsApp o número já vem confirmado.
     bot_allow_typed_phone: bool = False
+    # Lembrete ao cliente antes do atendimento confirmado
+    reminder_hours_before: int = 4          # quantas horas antes
+    arrive_early_minutes: int = 20          # "chegue X minutos antes" (aparece no lembrete)
+    reminder_quiet_start_hour: int = 21     # não manda lembrete entre 21h e 7h (horário local)
+    reminder_quiet_end_hour: int = 7
+    reminder_max_attempts: int = 10         # tentativas (1 por minuto) se o envio falhar
     bot_booking_days: int = 14        # quantos dias à frente o bot oferece
     bot_session_minutes: int = 30     # conversa parada por mais tempo volta ao menu
     verify_token_hours: int = 24   # validade do link de confirmação de e-mail

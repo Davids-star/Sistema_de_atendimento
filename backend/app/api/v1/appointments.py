@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.models import AdminUser, Appointment
 from app.models.appointment import ACTIVE_STATUSES
 from app.schemas.appointment import AppointmentCreate, AppointmentOut, AppointmentResult, AppointmentUpdate
 from app.services import appointments as svc
+from app.services import client_notify
 from app.services.availability import day_bounds
 
 # Todas as rotas de agendamento exigem o administrador (o WhatsApp usará o serviço direto, com strict=True).
@@ -60,24 +61,31 @@ def create_appointment(data: AppointmentCreate, db: Session = Depends(get_db),
 
 
 @router.patch("/{appointment_id}", response_model=AppointmentResult)
-def update_appointment(appointment_id: int, data: AppointmentUpdate, db: Session = Depends(get_db),
+def update_appointment(appointment_id: int, data: AppointmentUpdate, background: BackgroundTasks, db: Session = Depends(get_db),
                        admin: AdminUser = Depends(get_current_admin)):
     changes = data.model_dump(exclude_unset=True)
     if not changes:
         raise HTTPException(422, "Nenhum campo para alterar")
     if any(k in changes and changes[k] is None for k in ("starts_at", "service_id")):
         raise HTTPException(422, "starts_at e service_id não podem ser nulos")
+    existing = db.get(Appointment, appointment_id)
+    old_start = existing.starts_at if existing else None   # guarda o horário antigo para avisar a cliente
     appt, warnings = svc.update_appointment(db, admin, appointment_id, changes)
     db.commit()
     db.refresh(appt)
+    if old_start is not None and appt.starts_at != old_start:
+        background.add_task(client_notify.notify_rescheduled, appt.id, old_start.isoformat())   # depois de responder
     return AppointmentResult.model_validate(appt).model_copy(update={"warnings": warnings})
 
 
 def _action(action: str):
-    def endpoint(appointment_id: int, db: Session = Depends(get_db), admin: AdminUser = Depends(get_current_admin)):
+    def endpoint(appointment_id: int, background: BackgroundTasks, db: Session = Depends(get_db),
+                 admin: AdminUser = Depends(get_current_admin)):
         appt = svc.change_status(db, admin, appointment_id, action)
         db.commit()
         db.refresh(appt)
+        if action == "cancel":   # cancelado PELO PAINEL: avisa a cliente (cancelamento feito por ela no bot não passa por aqui)
+            background.add_task(client_notify.notify_cancelled, appt.id)
         return appt
     endpoint.__name__ = f"{action}_appointment"
     return endpoint

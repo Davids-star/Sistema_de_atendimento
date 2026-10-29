@@ -92,6 +92,14 @@ def to_payload(chat_id: str, reply: Reply) -> dict:
     return payload
 
 
+def send_reply(chat_id: str, reply: Reply) -> bool:
+    """Envia uma mensagem iniciada pelo SISTEMA (aviso, lembrete). Não mexe no teclado que a pessoa tenha aberto."""
+    payload = to_payload(str(chat_id), reply)
+    if not reply.buttons and not reply.ask_contact:
+        payload.pop("reply_markup", None)
+    return call("sendMessage", payload) is not None
+
+
 def _edit_payload(chat_id, message_id, reply: Reply) -> dict:
     """Troca o conteúdo da mensagem clicada (texto + botões novos). Sem botões, a edição também remove os antigos."""
     payload = to_payload(str(chat_id), reply)

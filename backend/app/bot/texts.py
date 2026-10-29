@@ -89,6 +89,25 @@ def booked(service: str, start: datetime) -> str:
     return f"✅ Agendado! {service}, {when(start)}.\nAté lá! Se precisar mudar, é só me chamar por aqui."
 
 
+def rescheduled(service: str, old: datetime, new: datetime) -> str:
+    return (f"📅 O horário do seu agendamento foi alterado.\n\n💅 {service}\nDe: {when(old)}\nPara: {when(new)}\n\n"
+            "Se esse novo horário não funcionar para você, é só me chamar por aqui.")
+
+
+def cancelled_by_studio(service: str, start: datetime) -> str:
+    return (f"❌ Precisamos cancelar o seu agendamento de {service} ({when(start)}). Sentimos muito pelo transtorno.\n\n"
+            "Quer marcar outro horário? Toque no botão abaixo.")
+
+
+def reminder(service: str, start: datetime) -> str:
+    from datetime import timedelta
+    early = settings.arrive_early_minutes
+    arrive = (start - timedelta(minutes=early)).astimezone(TZ)
+    return (f"⏰ Lembrete: você tem {service} {when(start)}.\n\n"
+            f"Por favor, chegue {early} minutos antes, por volta das {arrive:%H:%M}.\n"
+            "Se não puder comparecer, avise por aqui com antecedência para liberarmos o horário.")
+
+
 def my_appointment(index: int, service: str, start: datetime, status: str) -> str:
     mark = "✅ confirmado" if status == "confirmed" else "⏳ pendente"
     return f"{index}. {service}, {when(start)} ({mark})"

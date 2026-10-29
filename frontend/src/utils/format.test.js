@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { formatBRL, formatDayMonth, formatPercent } from './format'
-import { daysBetween, presetRange } from './period'
+import { daysBetween, presetRange, shiftAnchor, viewRange, weekBuckets } from './period'
 
 const norm = (s) => s.replace(/ /g, ' ') // Intl usa espaço não separável
 
@@ -49,5 +49,50 @@ describe('period', () => {
   it('daysBetween', () => {
     expect(daysBetween('2029-03-01', '2029-03-31')).toBe(31)
     expect(daysBetween('2029-03-05', '2029-03-05')).toBe(1)
+  })
+})
+
+describe('visão do dia a dia (dia, semana, mês)', () => {
+  it('dia, semana (seg-dom) e mês', () => {
+    expect(viewRange('day', '2029-03-15')).toMatchObject({ from: '2029-03-15', to: '2029-03-15', label: '15/03/2029' })
+    expect(viewRange('week', '2029-03-15')).toMatchObject({ from: '2029-03-12', to: '2029-03-18', label: '12/03 – 18/03' })
+    expect(viewRange('week', '2029-03-18')).toMatchObject({ from: '2029-03-12', to: '2029-03-18' })      // domingo
+    expect(viewRange('month', '2029-03-15')).toMatchObject({ from: '2029-03-01', to: '2029-03-31', label: 'março de 2029' })
+  })
+  it('fevereiro de ano bissexto e não bissexto', () => {
+    expect(viewRange('month', '2028-02-10').to).toBe('2028-02-29')
+    expect(viewRange('month', '2029-02-10').to).toBe('2029-02-28')
+  })
+  it('anda um dia, uma semana ou um mês, inclusive virando o mês e o ano', () => {
+    expect(shiftAnchor('day', '2029-03-31', 1)).toBe('2029-04-01')
+    expect(shiftAnchor('day', '2029-01-01', -1)).toBe('2028-12-31')
+    expect(shiftAnchor('week', '2029-03-15', 1)).toBe('2029-03-22')
+    expect(shiftAnchor('week', '2029-03-15', -1)).toBe('2029-03-08')
+    expect(shiftAnchor('month', '2029-03-15', 1)).toBe('2029-04-01')
+    expect(shiftAnchor('month', '2029-12-20', 1)).toBe('2030-01-01')
+    expect(shiftAnchor('month', '2029-01-20', -1)).toBe('2028-12-01')
+  })
+  it('mês: avançar a partir do dia 31 nunca cai em dia inexistente', () => {
+    expect(shiftAnchor('month', '2029-01-31', 1)).toBe('2029-02-01')
+    expect(viewRange('month', shiftAnchor('month', '2029-01-31', 1)).to).toBe('2029-02-28')
+  })
+  it('ida e volta volta ao mesmo lugar', () => {
+    for (const mode of ['day', 'week']) expect(shiftAnchor(mode, shiftAnchor(mode, '2029-03-15', 1), -1)).toBe('2029-03-15')
+  })
+  it('semanas do mês cobrem todos os dias exatamente uma vez', () => {
+    for (const month of ['2026-10-10', '2026-06-10', '2027-02-10', '2028-02-10', '2029-12-10']) {
+      const { from, to } = viewRange('month', month)
+      const buckets = weekBuckets(from, to)
+      expect(buckets.length).toBeLessThanOrEqual(6)
+      expect(buckets[0].from).toBe(from); expect(buckets.at(-1).to).toBe(to)
+      expect(buckets.reduce((n, b) => n + daysBetween(b.from, b.to), 0)).toBe(daysBetween(from, to))
+      for (let i = 1; i < buckets.length; i++) expect(daysBetween(buckets[i - 1].to, buckets[i].from)).toBe(2)   // sem lacunas
+    }
+  })
+  it('semanas de outubro de 2026 (começa numa quinta)', () => {
+    expect(weekBuckets('2026-10-01', '2026-10-31').map((b) => b.label)).toEqual(['01–04/10', '05–11/10', '12–18/10', '19–25/10', '26–31/10'])
+  })
+  it('um dia só vira um rótulo simples', () => {
+    expect(weekBuckets('2026-11-30', '2026-11-30')[0].label).toBe('30/11')
   })
 })

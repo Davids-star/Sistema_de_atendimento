@@ -146,6 +146,8 @@ def update_appointment(db: Session, admin: AdminUser, appointment_id: int, chang
         if "notes" in changes:
             appt.notes = changes["notes"]
         appt.service_id, appt.price_cents = service.id, new_price
+        if new_start != appt.starts_at:
+            appt.reminder_sent_at, appt.reminder_attempts = None, 0   # novo horário: o lembrete deve ser enviado de novo
         appt.starts_at = new_start
         appt.ends_at = new_start + timedelta(minutes=service.duration_minutes)
 
