@@ -13,11 +13,12 @@ const ACTION_COLOR = { confirm: 'success', cancel: 'error', complete: 'primary',
 // Ação principal = botão cheio; as demais ficam discretas.
 const ACTION_VARIANT = { confirm: 'flat', complete: 'flat', no_show: 'outlined', cancel: 'text' }
 
-const mode = ref('day')          // 'day' = agenda do dia | 'pending' = sem desfecho
+const mode = ref('day')          // 'day' = agenda do dia | 'upcoming' = todos os próximos | 'pending' = sem desfecho
 const day = ref(todayISO())
 const items = ref([])
 const week = ref([])             // contagem por dia da semana exibida
 const loading = ref(false)
+const next = ref(null)           // próximo agendamento (mostrado quando o dia aberto está vazio)
 
 const weekStart = computed(() => startOfWeek(day.value))
 const weekDays = computed(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart.value, i)))
@@ -29,6 +30,8 @@ async function load() {
   try {
     if (mode.value === 'pending') {
       items.value = await api('/appointments', { params: { needs_outcome: true, limit: 500 } })
+    } else if (mode.value === 'upcoming') {
+      items.value = await api('/appointments', { params: { upcoming: true, limit: 200 } })
     } else {
       const [list, byDay] = await Promise.all([
         api('/appointments', { params: { date_from: day.value, date_to: day.value, limit: 500 } }),
@@ -36,6 +39,8 @@ async function load() {
       ])
       items.value = list
       week.value = byDay
+      // Dia vazio: procura o próximo agendamento para a pessoa não achar que "sumiu tudo".
+      next.value = list.length ? null : (await api('/appointments', { params: { upcoming: true, limit: 1 } }))[0] ?? null
     }
   } catch (e) { notifyError(e) }
   finally { loading.value = false }
@@ -44,6 +49,12 @@ onMounted(load)
 watch([mode, day], load)
 
 const shift = (n) => { day.value = addDays(day.value, n) }
+// Na lista "Próximos", mostra um título quando muda o dia.
+const startsNewDay = (i) => i === 0 || dayOf(items.value[i - 1].starts_at) !== dayOf(items.value[i].starts_at)
+function goToNext() {
+  day.value = dayOf(next.value.starts_at)
+  mode.value = 'day'
+}
 const now = () => new Date()
 const actionsOf = (a) => availableActions(a, now())
 
@@ -72,11 +83,12 @@ const openEdit = (a) => { editing.value = a; dialog.value = true }
 <template>
   <div class="d-flex flex-wrap align-center ga-3 mb-6">
     <div class="mr-auto">
-      <div class="eyebrow mb-1">{{ mode === 'day' ? formatDayLong(day) : 'Pendências' }}</div>
+      <div class="eyebrow mb-1">{{ mode === 'day' ? formatDayLong(day) : mode === 'upcoming' ? 'Daqui para frente' : 'Pendências' }}</div>
       <h1 class="page-title">Agendamentos</h1>
     </div>
     <v-btn-toggle v-model="mode" mandatory density="comfortable" variant="outlined" color="primary" divided>
       <v-btn value="day" size="small" prepend-icon="mdi-calendar-today">Agenda</v-btn>
+      <v-btn value="upcoming" size="small" prepend-icon="mdi-calendar-arrow-right">Próximos</v-btn>
       <v-btn value="pending" size="small" prepend-icon="mdi-clock-alert-outline">Sem desfecho</v-btn>
     </v-btn-toggle>
     <v-btn class="d-none d-sm-flex" color="primary" prepend-icon="mdi-plus" size="large" @click="openNew">Novo agendamento</v-btn>
@@ -100,7 +112,7 @@ const openEdit = (a) => { editing.value = a; dialog.value = true }
       </div>
     </v-card>
   </template>
-  <v-alert v-else type="info" variant="tonal" class="mb-5" icon="mdi-information-outline">
+  <v-alert v-else-if="mode === 'pending'" type="info" variant="tonal" class="mb-5" icon="mdi-information-outline">
     Agendamentos que já terminaram e ainda estão pendentes ou confirmados. Marque cada um como concluído ou ausente, ou cancele.
   </v-alert>
 
@@ -108,11 +120,18 @@ const openEdit = (a) => { editing.value = a; dialog.value = true }
 
   <div v-if="!items.length && !loading" class="empty">
     <v-icon :icon="mode === 'pending' ? 'mdi-check-circle-outline' : 'mdi-calendar-blank-outline'" size="44" />
-    <div class="mt-2">{{ mode === 'pending' ? 'Tudo em dia! Nenhum agendamento sem desfecho.' : 'Nenhum agendamento neste dia.' }}</div>
-    <v-btn v-if="mode === 'day'" class="mt-4" variant="tonal" prepend-icon="mdi-plus" @click="openNew">Novo agendamento</v-btn>
+    <div class="mt-2">{{ mode === 'pending' ? 'Tudo em dia! Nenhum agendamento sem desfecho.' : mode === 'upcoming' ? 'Nenhum agendamento marcado daqui para frente.' : 'Nenhum agendamento neste dia.' }}</div>
+    <div v-if="mode === 'day' && next" class="next mt-4">
+      <div class="text-body-medium">Seu próximo agendamento é <strong>{{ formatDateTime(next.starts_at) }}</strong>
+        ({{ next.client_name }} · {{ next.service_name }}).</div>
+      <v-btn class="mt-2" color="primary" variant="flat" prepend-icon="mdi-calendar-arrow-right" @click="goToNext">Ver esse dia</v-btn>
+    </div>
+    <v-btn v-if="mode !== 'pending'" class="mt-4" variant="tonal" prepend-icon="mdi-plus" @click="openNew">Novo agendamento</v-btn>
   </div>
 
-  <v-card v-for="a in items" :key="a.id" class="appt mb-3" :class="[`s-${a.status}`, { dim: !canEdit(a) }]">
+  <template v-for="(a, i) in items" :key="a.id">
+  <div v-if="mode === 'upcoming' && startsNewDay(i)" class="day-head">{{ formatDayLong(dayOf(a.starts_at)) }}</div>
+  <v-card class="appt mb-3" :class="[`s-${a.status}`, { dim: !canEdit(a) }]">
     <div class="appt-main">
       <div class="time">
         <div class="t1 num">{{ timeOf(a.starts_at) }}</div>
@@ -138,6 +157,7 @@ const openEdit = (a) => { editing.value = a; dialog.value = true }
       <v-btn v-if="canEdit(a)" class="edit-btn" size="small" variant="text" prepend-icon="mdi-pencil-outline" title="Editar / remarcar" @click="openEdit(a)"><span class="edit-label">Editar</span></v-btn>
     </div>
   </v-card>
+  </template>
 
   <v-btn class="fab d-sm-none" color="primary" icon="mdi-plus" size="large" elevation="6" title="Novo agendamento" @click="openNew" />
 
@@ -195,6 +215,8 @@ const openEdit = (a) => { editing.value = a; dialog.value = true }
 .notes { margin-top: 6px; font-size: 0.82rem; font-style: italic; opacity: 0.75; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
 
+.day-head { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; opacity: 0.6; margin: 18px 2px 8px; }
+.next { max-width: 420px; margin-inline: auto; padding: 12px 14px; border-radius: 12px; background: rgba(var(--v-theme-primary), 0.07); }
 .empty { text-align: center; padding: 56px 16px; opacity: 0.7; }
 .fab { position: fixed; right: 18px; bottom: 18px; z-index: 5; }
 

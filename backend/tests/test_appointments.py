@@ -223,3 +223,42 @@ def test_response_includes_names(client, auth, setup):
     assert body["service_name"] == "Corte"
     listed = client.get(URL, params={"date_from": "2030-01-07", "date_to": "2030-01-07"}, headers=auth).json()
     assert listed[0]["client_name"] == "Ana" and listed[0]["service_name"] == "Corte"
+
+
+# ---------- filtro "próximos" ----------
+def test_upcoming_lists_only_active_future_appointments_in_order(client, auth, setup, db):
+    now = datetime.now(timezone.utc)
+    later = book(client, auth, setup, now + timedelta(days=3, hours=1)).json()["id"]
+    sooner = book(client, auth, setup, now + timedelta(days=1, hours=1)).json()["id"]
+    pending = book(client, auth, setup, now + timedelta(days=2, hours=1), status="pending").json()["id"]
+    cancelled = book(client, auth, setup, now + timedelta(days=4, hours=1)).json()["id"]
+    client.post(f"{URL}/{cancelled}/cancel", headers=auth)
+    done = book(client, auth, setup, now + timedelta(days=5, hours=1)).json()["id"]
+    from sqlalchemy import update as sql_update
+    db.execute(sql_update(Appointment).where(Appointment.id == done).values(status="completed"))
+    past = book(client, auth, setup, now + timedelta(days=6, hours=1)).json()["id"]
+    db.execute(sql_update(Appointment).where(Appointment.id == past).values(
+        starts_at=now - timedelta(hours=3), ends_at=now - timedelta(hours=2)))   # já terminou (a API não deixa criar no passado)
+    db.expire_all()
+
+    ids = [a["id"] for a in client.get(URL, params={"upcoming": True}, headers=auth).json()]
+    mine = [i for i in ids if i in {later, sooner, pending, cancelled, done, past}]
+    assert mine == [sooner, pending, later]                         # só ativos e futuros, do mais próximo ao mais distante
+
+
+def test_an_appointment_in_progress_still_counts_as_upcoming(client, auth, setup, db):
+    from sqlalchemy import update as sql_update
+    now = datetime.now(timezone.utc)
+    aid = book(client, auth, setup, now + timedelta(days=2)).json()["id"]
+    db.execute(sql_update(Appointment).where(Appointment.id == aid).values(
+        starts_at=now - timedelta(minutes=10), ends_at=now + timedelta(minutes=20)))   # começou há 10 min e termina em 20
+    db.expire_all()
+    assert aid in [a["id"] for a in client.get(URL, params={"upcoming": True}, headers=auth).json()]
+
+
+def test_upcoming_respects_the_limit_and_requires_auth(client, auth, setup):
+    now = datetime.now(timezone.utc)
+    for i in range(3):
+        book(client, auth, setup, now + timedelta(days=1 + i, hours=1))
+    assert len(client.get(URL, params={"upcoming": True, "limit": 2}, headers=auth).json()) == 2
+    assert client.get(URL, params={"upcoming": True}).status_code == 401

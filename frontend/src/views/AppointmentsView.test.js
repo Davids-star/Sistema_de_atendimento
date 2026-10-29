@@ -97,6 +97,75 @@ describe('AppointmentsView', () => {
   })
 })
 
+describe('AppointmentsView: ver o que está marcado', () => {
+  const tomorrow = (h) => new Date(Date.now() + 86400000 + h * 3600000).toISOString()
+  const dayAfter = (h) => new Date(Date.now() + 2 * 86400000 + h * 3600000).toISOString()
+  const onlyUpcoming = (list) => api.mockImplementation(async (path, opts = {}) => {
+    if (path === '/dashboard/appointments-by-day') return []
+    if (path === '/appointments' && opts.params?.upcoming) return list.slice(0, opts.params.limit ?? 999)
+    if (path === '/appointments' && !opts.method) return []                    // o dia de hoje está vazio
+    return []
+  })
+
+  it('dia vazio: avisa qual é o próximo agendamento e leva até ele', async () => {
+    onlyUpcoming([appt({ id: 7, starts_at: tomorrow(1), ends_at: tomorrow(2), status: 'confirmed', client_name: 'Felipe', service_name: 'Unha em gel' })])
+    await mountView(AppointmentsView)
+    const t = bodyText()
+    expect(t).toContain('Nenhum agendamento neste dia')
+    expect(t).toContain('Seu próximo agendamento é')
+    expect(t).toContain('Felipe · Unha em gel')
+    await clickButton('Ver esse dia')
+    const lastDayCall = api.mock.calls.filter(([p, o]) => p === '/appointments' && o.params?.date_from).at(-1)[1].params
+    expect(lastDayCall.date_from).toBe(lastDayCall.date_to)                      // foi para um dia só
+    expect(lastDayCall.date_from).not.toBe(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()))
+  })
+
+  it('dia vazio e nada marcado no futuro: não mostra o aviso do próximo', async () => {
+    onlyUpcoming([])
+    await mountView(AppointmentsView)
+    expect(bodyText()).toContain('Nenhum agendamento neste dia')
+    expect(bodyText()).not.toContain('Seu próximo agendamento')
+  })
+
+  it('dia com agendamentos não faz a consulta extra do próximo', async () => {
+    backend([appt()])
+    await mountView(AppointmentsView)
+    expect(api.mock.calls.some(([, o]) => o?.params?.upcoming)).toBe(false)
+    expect(bodyText()).not.toContain('Seu próximo agendamento')
+  })
+
+  it('aba "Próximos" lista tudo daqui para frente, agrupado por dia', async () => {
+    onlyUpcoming([
+      appt({ id: 1, starts_at: tomorrow(1), ends_at: tomorrow(2), status: 'confirmed', client_name: 'Ana' }),
+      appt({ id: 2, starts_at: tomorrow(3), ends_at: tomorrow(4), status: 'pending', client_name: 'Bia' }),
+      appt({ id: 3, starts_at: dayAfter(1), ends_at: dayAfter(2), status: 'confirmed', client_name: 'Carla' }),
+    ])
+    await mountView(AppointmentsView)
+    await clickButton('Próximos')
+    expect(api.mock.calls.some(([p, o]) => p === '/appointments' && o.params?.upcoming === true && o.params?.limit === 200)).toBe(true)
+    const t = bodyText()
+    expect(t).toContain('Ana'); expect(t).toContain('Bia'); expect(t).toContain('Carla')
+    expect(t).toContain('Daqui para frente')
+    expect(document.querySelectorAll('.day-head')).toHaveLength(2)              // 2 dias diferentes = 2 títulos (Ana e Bia no mesmo dia)
+    expect(document.querySelectorAll('.appt')).toHaveLength(3)
+  })
+
+  it('aba "Próximos" vazia explica que não há nada marcado', async () => {
+    onlyUpcoming([])
+    await mountView(AppointmentsView)
+    await clickButton('Próximos')
+    expect(bodyText()).toContain('Nenhum agendamento marcado daqui para frente')
+  })
+
+  it('na aba "Próximos" dá para criar um agendamento e as ações continuam disponíveis', async () => {
+    onlyUpcoming([appt({ id: 1, starts_at: tomorrow(1), ends_at: tomorrow(2), status: 'pending' })])
+    await mountView(AppointmentsView)
+    await clickButton('Próximos')
+    expect(buttonTexts().some((b) => b.includes('Confirmar'))).toBe(true)
+    expect(buttonTexts().some((b) => b.includes('Novo agendamento'))).toBe(true)
+  })
+})
+
 describe('AppointmentDialog (remarcar)', () => {
   it('mostra horários livres e envia só o horário alterado', async () => {
     backend([appt()])

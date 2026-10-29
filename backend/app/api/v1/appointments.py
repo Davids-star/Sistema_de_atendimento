@@ -24,6 +24,7 @@ def list_appointments(date_from: date | None = None, date_to: date | None = None
                       status_: str | None = Query(None, alias="status", pattern=STATUSES),
                       client_id: int | None = None,
                       needs_outcome: bool = Query(False, description="só os que já terminaram e ainda estão pendentes/confirmados"),
+                      upcoming: bool = Query(False, description="só os pendentes/confirmados que ainda não terminaram (de agora em diante)"),
                       limit: int = Query(100, ge=1, le=500),
                       offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
     query = select(Appointment).order_by(Appointment.starts_at, Appointment.id).limit(limit).offset(offset)
@@ -35,6 +36,8 @@ def list_appointments(date_from: date | None = None, date_to: date | None = None
         query = query.where(Appointment.status == status_)
     if client_id:
         query = query.where(Appointment.client_id == client_id)
+    if upcoming:
+        query = query.where(Appointment.status.in_(ACTIVE_STATUSES), Appointment.ends_at > datetime.now(timezone.utc))
     if needs_outcome:
         query = query.where(Appointment.status.in_(ACTIVE_STATUSES), Appointment.ends_at < datetime.now(timezone.utc))
     return db.scalars(query).all()
