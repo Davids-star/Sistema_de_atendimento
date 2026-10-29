@@ -75,7 +75,7 @@ def test_forgot_rate_limit_also_applies_to_unknown_emails(client, admin, outbox)
 
 def test_token_is_stored_only_as_hash(client, admin, db, outbox):
     raw = request_reset(client, outbox)
-    stored = db.scalars(select(PasswordResetToken)).all()
+    stored = db.scalars(select(PasswordResetToken).where(PasswordResetToken.admin_user_id == admin.id)).all()   # só os deste teste
     assert [t.token_hash for t in stored] == [hash_reset_token(raw)]
     assert raw not in stored[0].token_hash
 

@@ -5,7 +5,7 @@ from app.db.session import Base
 
 
 class ShopSettings(Base):
-    """Configurações da barbearia. Sempre uma única linha (id = 1)."""
+    """Configurações do negócio. Sempre uma única linha (id = 1)."""
 
     __tablename__ = "shop_settings"
     __table_args__ = (

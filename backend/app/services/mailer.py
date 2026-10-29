@@ -41,8 +41,8 @@ def send_reset_email(to: str, raw_token: str) -> None:
     link = f"{settings.frontend_url.rstrip('/')}/redefinir-senha?token={raw_token}"
     send_mail(
         to,
-        "Redefinição de senha - Painel da Barbearia",
-        "Recebemos um pedido para redefinir a senha do painel da barbearia.\n\n"
+        f"Redefinição de senha - {settings.business_name}",
+        "Recebemos um pedido para redefinir a senha do painel de agendamentos.\n\n"
         f"Para criar uma nova senha, abra o link abaixo (vale por {settings.reset_token_minutes} minutos e só pode ser usado uma vez):\n\n"
         f"{link}\n\n"
         "Se não foi você, ignore este e-mail: a sua senha continua a mesma.",
@@ -53,11 +53,11 @@ def send_verification_email(to: str, raw_token: str) -> None:
     link = f"{settings.frontend_url.rstrip('/')}/confirmar-email?token={raw_token}"
     send_mail(
         to,
-        "Confirme seu e-mail - Painel da Barbearia",
-        "Recebemos um cadastro no painel da barbearia com este e-mail.\n\n"
+        f"Confirme seu e-mail - {settings.business_name}",
+        "Recebemos um cadastro no painel de agendamentos com este e-mail.\n\n"
         f"Para confirmar que ele é seu, abra o link abaixo (vale por {settings.verify_token_hours} horas e só pode ser usado uma vez):\n\n"
         f"{link}\n\n"
-        "Depois de confirmar, o dono da barbearia precisa liberar o seu acesso.\n"
+        "Depois de confirmar, o dono precisa liberar o seu acesso.\n"
         "Se não foi você, ignore este e-mail: sem a confirmação, essa conta não consegue entrar nem ver nada.",
     )
 
@@ -67,8 +67,8 @@ def send_already_registered_email(to: str) -> None:
     link = f"{settings.frontend_url.rstrip('/')}/login"
     send_mail(
         to,
-        "Você já tem uma conta - Painel da Barbearia",
-        "Alguém tentou criar uma conta no painel da barbearia com este e-mail, mas ele já está cadastrado.\n\n"
+        f"Você já tem uma conta - {settings.business_name}",
+        "Alguém tentou criar uma conta no painel de agendamentos com este e-mail, mas ele já está cadastrado.\n\n"
         f"Se foi você, é só entrar: {link}\n"
         "Se esqueceu a senha, use a opção \"Esqueci minha senha\" na tela de entrada.\n\n"
         "Se não foi você, ignore este e-mail.",

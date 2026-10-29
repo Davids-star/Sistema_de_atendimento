@@ -202,9 +202,9 @@ const revenueItems = computed(() => {
 
 /* Cartão de destaque (faturamento registrado) */
 .kpi.feature { background: var(--ink); border-color: transparent !important; color: #f3ece0; }
-.kpi.feature .kpi-icon { background: rgba(215, 174, 98, 0.18); color: #e8c680; }
+.kpi.feature .kpi-icon { background: rgba(159, 195, 184, 0.18); color: #bfe0d5; }
 .kpi.feature .kpi-sub { color: rgba(243, 236, 224, 0.62); }
-.v-theme--dark .kpi.feature { background: linear-gradient(145deg, #2a2415, #171d27); border: 1px solid rgba(215, 174, 98, 0.3) !important; }
+.v-theme--dark .kpi.feature { background: linear-gradient(145deg, #1f2b27, #171d27); border: 1px solid rgba(159, 195, 184, 0.3) !important; }
 
 .status-row { display: grid; grid-template-columns: 10px 110px 1fr 40px; align-items: center; gap: 12px; padding: 7px 0; }
 .dot { width: 10px; height: 10px; border-radius: 50%; }

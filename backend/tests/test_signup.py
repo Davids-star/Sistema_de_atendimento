@@ -203,3 +203,16 @@ def test_profile_cannot_escalate_privileges(client, db):
 def test_owner_fixture_has_full_access(client, auth):
     assert client.get(ME, headers=auth).json()["status"] == "active"
     assert client.get("/api/v1/clients", headers=auth).status_code == 200
+
+
+# ---------- nome do negócio nos e-mails ----------
+def test_emails_use_the_configured_business_name_and_no_barbershop_wording(monkeypatch):
+    sent = []
+    monkeypatch.setattr(mailer, "send_mail", lambda to, subject, body: sent.append((subject, body)))
+    monkeypatch.setattr(settings, "business_name", "Estúdio Bela")
+    mailer.send_verification_email("a@x.com", "T" * 30)
+    mailer.send_reset_email("a@x.com", "T" * 30)
+    mailer.send_already_registered_email("a@x.com")
+    assert [s for s, _ in sent] == ["Confirme seu e-mail - Estúdio Bela", "Redefinição de senha - Estúdio Bela",
+                                    "Você já tem uma conta - Estúdio Bela"]
+    assert all("arbearia" not in (s + b) for s, b in sent)

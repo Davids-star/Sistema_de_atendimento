@@ -51,6 +51,6 @@ async function submit() {
 </template>
 
 <style scoped>
-.link { font-size: 0.9rem; color: #8a6420; text-decoration: none; font-weight: 500; }
+.link { font-size: 0.9rem; color: var(--link); text-decoration: none; font-weight: 500; }
 .link:hover { text-decoration: underline; }
 </style>

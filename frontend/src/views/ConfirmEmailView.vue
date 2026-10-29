@@ -31,7 +31,7 @@ onMounted(async () => {
 
     <template v-else-if="state === 'ok'">
       <v-alert type="success" variant="tonal" class="mt-4 mb-4" icon="mdi-check-circle-outline">
-        E-mail confirmado! Agora é só entrar. Se o seu acesso ainda não foi liberado, o dono da barbearia precisa liberar.
+        E-mail confirmado! Agora é só entrar. Se o seu acesso ainda não foi liberado, o dono precisa liberar.
       </v-alert>
       <v-btn color="primary" size="x-large" block :to="{ name: 'login' }">Ir para o login</v-btn>
     </template>

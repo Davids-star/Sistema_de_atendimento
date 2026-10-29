@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 60
     log_level: str = "INFO"
+    business_name: str = "Agenda"   # nome do negócio nos e-mails e mensagens (BUSINESS_NAME no .env)
     google_client_id: str = ""   # vazio = login com Google desligado
     # Redefinição de senha por e-mail
     frontend_url: str = "http://localhost:5173"   # usado para montar o link enviado por e-mail

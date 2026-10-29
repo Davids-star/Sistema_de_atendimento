@@ -25,7 +25,7 @@ def describe_location(ip: str | None) -> str:
     if not settings.geoip_url:
         return UNKNOWN
     try:
-        r = requests.get(settings.geoip_url.format(ip=ip), timeout=4, headers={"User-Agent": "barbearia-painel"})
+        r = requests.get(settings.geoip_url.format(ip=ip), timeout=4, headers={"User-Agent": "agenda-painel"})
         data = r.json() if r.ok else {}
     except Exception:
         logger.warning("consulta de localizacao falhou")   # sem detalhes: a URL/resposta podem conter o IP

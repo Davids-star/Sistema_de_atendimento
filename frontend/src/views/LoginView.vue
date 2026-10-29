@@ -136,7 +136,7 @@ onMounted(async () => {
       <template v-if="signupDone">
         <v-alert type="success" variant="tonal" class="mb-4" icon="mdi-email-check-outline">
           Enviamos um e-mail para <strong>{{ form.email }}</strong>. Abra o link para confirmar o cadastro (vale 24 horas).
-          Depois, o dono da barbearia precisa liberar o seu acesso. Confira também a caixa de spam.
+          Depois, o dono precisa liberar o seu acesso. Confira também a caixa de spam.
           Se este e-mail já tinha uma conta, a mensagem avisa e explica como entrar (não há link de confirmação).
         </v-alert>
         <a href="#" class="link" @click.prevent="resend(form.email)">Não chegou? Reenviar e-mail</a>
@@ -157,7 +157,7 @@ onMounted(async () => {
                         :error-messages="form.confirm && signupProblems.password ? signupProblems.password : ''" />
           <p class="privacy">
             Por segurança, registramos o seu endereço IP e a sua localização aproximada ao criar a conta,
-            e o dono da barbearia recebe o seu nome, celular e localização para decidir sobre o acesso.
+            e o dono recebe o seu nome, celular e localização para decidir sobre o acesso.
           </p>
           <v-btn type="submit" color="primary" size="x-large" block :loading="signing" :disabled="!signupValid">Criar conta</v-btn>
         </v-form>
@@ -171,6 +171,6 @@ onMounted(async () => {
 .google-btn { min-height: 44px; display: flex; justify-content: center; }
 .or { display: flex; align-items: center; gap: 12px; margin: 18px 0; font-size: 0.8rem; color: rgba(var(--v-theme-on-surface), 0.55); }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: rgba(var(--v-theme-on-surface), 0.12); }
-.link { font-size: 0.85rem; color: #8a6420; text-decoration: none; font-weight: 500; }
+.link { font-size: 0.85rem; color: var(--link); text-decoration: none; font-weight: 500; }
 .link:hover { text-decoration: underline; }
 </style>

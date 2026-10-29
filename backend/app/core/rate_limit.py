@@ -1,7 +1,7 @@
 """Limitador de requisições em memória (janela deslizante).
 
 Simples e sem dependências. Vale para UM processo: se um dia rodarmos vários workers,
-cada um terá seu próprio contador (aí trocaríamos por Redis). Para o porte da barbearia basta.
+cada um terá seu próprio contador (aí trocaríamos por Redis). Para um negócio pequeno basta.
 """
 import threading
 import time

@@ -1,4 +1,4 @@
-"""Indicadores do painel. Datas são interpretadas no fuso da barbearia."""
+"""Indicadores do painel. Datas são interpretadas no fuso do negócio."""
 from datetime import date, datetime, timedelta
 from typing import Literal
 

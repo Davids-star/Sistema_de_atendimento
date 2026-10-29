@@ -122,7 +122,7 @@ describe('LoginView: criar conta e e-mail não confirmado', () => {
     await mountLogin()
     const panel = document.querySelectorAll('form')[1]
     expect(panel.textContent).toContain('registramos o seu endereço IP e a sua localização aproximada')
-    expect(panel.textContent).toContain('dono da barbearia recebe o seu nome, celular e localização')
+    expect(panel.textContent).toContain('dono recebe o seu nome, celular e localização')
     expect(panel.querySelector('.privacy')).not.toBeNull()
   })
 
@@ -135,7 +135,7 @@ describe('LoginView: criar conta e e-mail não confirmado', () => {
       name: 'Maria Souza', phone: '(11) 98888-7777', email: 'maria@gmail.com',
       password: 'uma-senha-forte-1', password_confirm: 'uma-senha-forte-1' } })
     expect(bodyText()).toContain('Enviamos um e-mail para maria@gmail.com')
-    expect(bodyText()).toContain('o dono da barbearia precisa liberar')
+    expect(bodyText()).toContain('o dono precisa liberar')
   })
 
   it('erro do cadastro (ex.: muitas tentativas) aparece e o formulário continua', async () => {

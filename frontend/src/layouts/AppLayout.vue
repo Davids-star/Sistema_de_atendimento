@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisplay, useTheme } from 'vuetify'
 import { api, setToken } from '../api'
+import { BRAND } from '../brand'
 import { saveTheme } from '../plugins/vuetify'
 import { loadUser, resetSession, session } from '../session'
 import { toast } from '../utils/notify'
@@ -17,7 +18,7 @@ const pendingUsers = ref(0)   // só o dono vê: pessoas aguardando liberação
 const nav = [
   { title: 'Dashboard', icon: 'mdi-view-dashboard-outline', to: { name: 'dashboard' }, exact: true },
   { title: 'Agendamentos', icon: 'mdi-calendar-month-outline', to: { name: 'appointments' } },
-  { title: 'Serviços', icon: 'mdi-content-cut', to: { name: 'services' } },
+  { title: 'Serviços', icon: 'mdi-shimmer', to: { name: 'services' } },
   { title: 'Clientes', icon: 'mdi-account-multiple-outline', to: { name: 'clients' } },
   { title: 'Usuários', icon: 'mdi-shield-account-outline', to: { name: 'users' }, ownerOnly: true },
   { title: 'Configurações', icon: 'mdi-cog-outline', to: { name: 'settings' } },
@@ -50,9 +51,9 @@ async function logout() {
 <template>
   <v-navigation-drawer v-model="drawer" :permanent="mdAndUp" width="256" theme="dark" class="sidebar">
     <div class="brand">
-      <div class="brand-mark"><v-icon icon="mdi-content-cut" size="22" /></div>
+      <div class="brand-mark"><v-icon :icon="BRAND.icon" size="22" /></div>
       <div>
-        <div class="brand-name">Barbearia</div>
+        <div class="brand-name">{{ BRAND.name }}</div>
         <div class="brand-sub">Painel</div>
       </div>
     </div>

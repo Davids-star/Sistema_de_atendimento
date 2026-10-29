@@ -1,4 +1,4 @@
-// Datas e horas sempre no fuso da barbearia, não no do computador de quem olha.
+// Datas e horas sempre no fuso do negócio, não no do computador de quem olha.
 export const SHOP_TZ = 'America/Sao_Paulo'
 
 const partsFmt = new Intl.DateTimeFormat('en-CA', {
@@ -34,6 +34,6 @@ export function startOfWeek(day) {
   return addDays(day, -((dow + 6) % 7))
 }
 
-// <input type="datetime-local"> (sem fuso) -> ISO com fuso. Assume que o navegador está no fuso da barbearia.
+// <input type="datetime-local"> (sem fuso) -> ISO com fuso. Assume que o navegador está no fuso do negócio.
 export const localInputToISO = (value) => new Date(value).toISOString()
 export const isoToLocalInput = (iso) => { const p = parts(iso); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}` }

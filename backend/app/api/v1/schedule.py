@@ -1,4 +1,4 @@
-"""Funcionamento da barbearia: horários, bloqueios, configurações e disponibilidade."""
+"""Funcionamento do negócio: horários, bloqueios, configurações e disponibilidade."""
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status

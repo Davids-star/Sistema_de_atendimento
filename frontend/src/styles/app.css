@@ -3,8 +3,9 @@
   --v-font-body: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --v-font-heading: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
-  --brass: #b8893a;
-  --ink: #141f2b;
+  --accent: #6f9c8f;
+  --ink: #1c252c;
+  --link: #3d6b5e;   /* verde-sálvia escuro: contraste bom sobre fundo claro */
 }
 
 body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiased; }
@@ -47,7 +48,8 @@ body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiase
 .v-field { border-radius: 10px; }
 
 /* Rolagem e seleção de texto na cor da marca */
-::selection { background: rgba(184, 137, 58, 0.3); }
+::selection { background: rgba(111, 156, 143, 0.3); }
+.v-theme--dark { --link: #9fc3b8; }
 
 /* Barra lateral: sempre escura, nos dois temas */
 .sidebar.v-navigation-drawer { background: var(--ink) !important; border-right: none !important; }
@@ -55,7 +57,7 @@ body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiase
 .sidebar .brand { display: flex; align-items: center; gap: 12px; padding: 22px 20px 18px; }
 .sidebar .brand-mark {
   width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0;
-  background: linear-gradient(145deg, #d7ae62, #a97c2f); color: #1a1408;
+  background: linear-gradient(145deg, #9fc3b8, #6f9c8f); color: #10201b;
 }
 .sidebar .brand-name { font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; line-height: 1.1; color: #f3ece0; }
 .sidebar .brand-sub { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(243, 236, 224, 0.5); margin-top: 2px; }
@@ -65,10 +67,10 @@ body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiase
   transition: background 0.15s, color 0.15s;
 }
 .sidebar .v-list-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
-.sidebar .v-list-item--active { background: rgba(215, 174, 98, 0.14) !important; color: #e8c680 !important; }
+.sidebar .v-list-item--active { background: rgba(159, 195, 184, 0.14) !important; color: #bfe0d5 !important; }
 .sidebar .v-list-item--active .v-list-item__overlay { opacity: 0; }
 .sidebar .v-list-item--active::before {
-  content: ''; position: absolute; left: -12px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: #d7ae62;
+  content: ''; position: absolute; left: -12px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: #9fc3b8;
 }
 .sidebar .v-list-item-title { font-size: 0.92rem; font-weight: 500; }
 .sidebar .v-list-item .v-icon { opacity: 0.9; }
@@ -95,4 +97,4 @@ body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiase
 
 /* Contador de pendências no menu lateral */
 .nav-badge { min-width: 22px; padding: 1px 7px; border-radius: 11px; font-size: 0.75rem; font-weight: 700; text-align: center;
-             background: #d7ae62; color: #1a1408; }
+             background: #9fc3b8; color: #10201b; }

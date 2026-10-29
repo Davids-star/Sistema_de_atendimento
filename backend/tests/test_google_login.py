@@ -70,7 +70,7 @@ def test_unknown_google_account_gets_a_pending_account_with_no_access(client, ad
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
     me = client.get("/api/v1/auth/me", headers=headers).json()
     assert me["status"] == "pending_approval" and me["approved"] is False
-    # ...mas não enxerga nada da barbearia
+    # ...mas não enxerga nada do negócio
     for path in ("/api/v1/clients", "/api/v1/appointments", "/api/v1/dashboard/summary", "/api/v1/settings"):
         assert client.get(path, headers=headers).status_code == 403, path
 

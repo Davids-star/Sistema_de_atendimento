@@ -21,7 +21,7 @@ describe('formatPhone / duration', () => {
   })
 })
 
-describe('datetime (fuso da barbearia)', () => {
+describe('datetime (fuso do negócio)', () => {
   it('23:30 local não vira o dia seguinte', () => {
     expect(dayOf('2029-03-08T02:30:00Z')).toBe('2029-03-07')   // 23:30 em São Paulo
     expect(timeOf('2029-03-08T02:30:00Z')).toBe('23:30')

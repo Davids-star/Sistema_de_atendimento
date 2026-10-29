@@ -45,7 +45,7 @@ def get_optional_admin(user: AdminUser | None = Depends(get_optional_user)) -> A
 
 def get_current_admin(user: AdminUser = Depends(get_current_user)) -> AdminUser:
     if not user.approved:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Seu acesso ainda não foi liberado pelo dono da barbearia")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Seu acesso ainda não foi liberado pelo dono")
     return user
 
 

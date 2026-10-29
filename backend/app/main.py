@@ -12,7 +12,7 @@ from app.services.appointments import AppointmentError
 
 setup_logging()
 
-app = FastAPI(title="Agendamento Barbearia", version="0.1.0")
+app = FastAPI(title="Agendamento", version="0.1.0")
 # Ordem: o último registrado fica por fora. CORS por fora de tudo para que até as respostas 429 o tenham.
 app.middleware("http")(rate_limiting)
 app.middleware("http")(request_logging)
