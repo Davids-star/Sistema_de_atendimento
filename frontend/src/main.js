@@ -7,9 +7,10 @@ import './styles/app.css' // depois do Vuetify, para os nossos estilos prevalece
 import router from './router'
 import { setUnauthorizedHandler } from './api'
 import { BRAND } from './brand'
+import { resetInbox } from './notifications'
 import { resetSession } from './session'
 
-setUnauthorizedHandler(() => { resetSession(); router.push({ name: 'login' }) })
+setUnauthorizedHandler(() => { resetSession(); resetInbox(); router.push({ name: 'login' }) })
 
 document.title = BRAND.name
 

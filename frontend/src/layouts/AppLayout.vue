@@ -1,10 +1,12 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisplay, useTheme } from 'vuetify'
 import { api, setToken } from '../api'
 import { BRAND } from '../brand'
 import { saveTheme } from '../plugins/vuetify'
+import NotificationBell from '../components/NotificationBell.vue'
+import { resetInbox, startPolling, stopPolling } from '../notifications'
 import { loadUser, resetSession, session } from '../session'
 import { toast } from '../utils/notify'
 
@@ -34,16 +36,20 @@ function toggleTheme() {
 const initial = computed(() => (admin.value?.name ?? '?').trim().charAt(0).toUpperCase())
 
 onMounted(async () => {
+  startPolling()   // avisos do sino enquanto o painel estiver aberto
   const user = await loadUser()   // 401 já redireciona para o login
   if (user?.is_owner) {
     try { pendingUsers.value = (await api('/users', { params: { status: 'pending_approval' } })).length } catch { /* só um aviso */ }
   }
 })
 
+onBeforeUnmount(stopPolling)
+
 async function logout() {
   try { await api('/auth/logout', { method: 'POST' }) } catch { /* o token é descartado de qualquer forma */ }
   setToken(null)
   resetSession()
+  resetInbox()   // a próxima pessoa não herda os avisos desta
   router.push({ name: 'login' })
 }
 </script>
@@ -71,6 +77,7 @@ async function logout() {
   <v-app-bar flat class="app-bar" height="64">
     <v-app-bar-nav-icon v-if="!mdAndUp" @click="drawer = !drawer" />
     <v-spacer />
+    <NotificationBell />
     <v-btn :icon="isDark ? 'mdi-weather-sunny' : 'mdi-weather-night'" variant="text" :title="isDark ? 'Tema claro' : 'Tema escuro'"
            @click="toggleTheme" />
     <div v-if="admin" class="d-flex align-center ga-2 mx-2">

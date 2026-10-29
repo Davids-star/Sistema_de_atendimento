@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import AdminUser, Appointment, BlockedTime, BusinessHours, Client, Service
-from app.services import audit
+from app.services import audit, notifications
 from app.services.availability import TZ, slots_for_day
 from app.services.clients import get_or_create_by_phone, normalize_phone
 
@@ -127,6 +127,8 @@ def create_appointment(db: Session, *, admin: AdminUser | None, client_id: int |
     audit.record(db, admin, "create", "appointment", appt.id,
                  {"client_id": client.id, "service_id": service.id, "starts_at": starts_at.isoformat(),
                   "status": status, "source": source, "warnings": warnings})
+    if source != "admin":   # a cliente agendou sozinha (bot): avisa o painel
+        notifications.appointment_booked(db, appt)
     return appt, warnings
 
 
@@ -176,4 +178,6 @@ def change_status(db: Session, admin: AdminUser | None, appointment_id: int, act
         appt.cancelled_at = _now()
         changes["by"] = appt.cancelled_by
     audit.record(db, admin, action, "appointment", appt.id, changes)
+    if action == "cancel":   # aviso no sino de todos do painel, menos de quem cancelou
+        notifications.appointment_cancelled(db, appt, exclude_user_id=admin.id if admin else None)
     return appt

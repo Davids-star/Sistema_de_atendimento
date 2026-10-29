@@ -37,3 +37,15 @@ export function startOfWeek(day) {
 // <input type="datetime-local"> (sem fuso) -> ISO com fuso. Assume que o navegador está no fuso do negócio.
 export const localInputToISO = (value) => new Date(value).toISOString()
 export const isoToLocalInput = (iso) => { const p = parts(iso); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}` }
+
+
+// "agora", "há 5 min", "há 2 h", "ontem", "28/10 14:05". `now` existe para os testes.
+export function timeAgo(iso, now = new Date()) {
+  const diff = Math.max(0, now.getTime() - new Date(iso).getTime())
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return 'agora'
+  if (min < 60) return `há ${min} min`
+  if (min < 24 * 60 && dayOf(iso) === dayOf(now.toISOString())) return `há ${Math.floor(min / 60)} h`
+  if (dayOf(iso) === addDays(dayOf(now.toISOString()), -1)) return 'ontem'
+  return formatDateTime(iso).slice(0, 5) + ' ' + timeOf(iso)
+}

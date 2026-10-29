@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models import AdminUser
-from app.services import geoip, mailer, telegram
+from app.services import geoip, mailer, notifications, telegram
 from app.services.users import UserActionError  # noqa: F401  (reexport para quem importa daqui)
 
 logger = logging.getLogger("app.notify")
@@ -43,6 +43,8 @@ def notify_owner_new_user(user_id: int) -> None:
             user = db.get(AdminUser, user_id)
             if user is None or user.approved or user.owner_notified_at is not None:
                 return
+            notifications.user_signup(db, user)   # sino do painel (não duplica se o envio for repetido)
+            db.commit()
             owners = db.scalars(select(AdminUser).where(AdminUser.is_owner, AdminUser.is_active)).all()
             location = geoip.describe_location(user.signup_ip)
             via = "Google" if user.google_sub else "e-mail e senha"
