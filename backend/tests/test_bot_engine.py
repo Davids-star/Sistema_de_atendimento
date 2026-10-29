@@ -28,6 +28,7 @@ def studio(db, monkeypatch):
     db.flush()
     booked = []
     monkeypatch.setattr(owner_notify, "notify_owner_booking", lambda appointment_id, via="bot": booked.append((appointment_id, via)))
+    monkeypatch.setattr(engine, "run_in_background", lambda fn, *a: fn(*a))   # nos testes, roda na hora (sem thread)
     return booked
 
 
@@ -80,7 +81,8 @@ def test_full_booking_for_a_new_client_on_telegram(db, studio):
 
     c.press("Agendar")
     assert "Qual serviço" in c.text()
-    assert {"Manicure · 45 min · R$ 45,00", "Pedicure · 1 h · R$ 55,00"} <= {b.text for b in c.buttons()}
+    by_title = {b.text: b.description for b in c.buttons()}
+    assert by_title["Manicure"] == "45 min · R$ 45,00" and by_title["Pedicure"] == "1 h · R$ 55,00"   # título curto + detalhe
 
     c.press("Manicure")
     assert c.text() == texts.CHOOSE_DAY and any(b.text.startswith("Hoje") or b.text.startswith("Amanhã") or b.data.startswith("day:") for b in c.buttons())
@@ -247,14 +249,14 @@ def test_names_with_markup_are_stored_as_plain_text(db):
 def test_list_and_cancel_my_appointment(db):
     c = Chat(db)
     book_until_confirm(c); c.send("Maria Souza"); c.press("Confirmar")
-    c.press("Meus agendamentos")
+    c.press("Meus horários")
     assert "Seus próximos agendamentos" in c.text() and "Manicure" in c.text() and "confirmado" in c.text()
     c.press("Cancelar 1")
     assert "Cancelar Manicure" in c.text()
     c.press("Sim, cancelar")
     assert c.text() == texts.CANCELLED
     assert appointments(db)[0].status == "cancelled"
-    c.press("Meus agendamentos")
+    c.press("Meus horários")
     assert texts.NOTHING_BOOKED in c.text()
     assert db.scalars(select(Appointment).where(Appointment.status == "cancelled")).first() is not None
 
@@ -361,7 +363,102 @@ def test_every_button_fits_telegrams_64_byte_limit(db):
     book_until_confirm(c)
     c.send("Maria Souza")
     for step in (lambda: c.send("/start"), lambda: c.press("Agendar"), lambda: c.press("Manicure"), lambda: c.press(""),
-                 lambda: c.press(":"), lambda: c.press("Confirmar"), lambda: c.press("Meus agendamentos")):
+                 lambda: c.press(":"), lambda: c.press("Confirmar"), lambda: c.press("Meus horários")):
         step()
         seen += [b.data for b in c.buttons()]
     assert seen and all(len(d.encode()) <= 64 for d in seen), max(seen, key=len)
+
+
+# ---------------------------------------------------------------- portabilidade (WhatsApp) e velocidade
+def walk_flow(c):
+    """Percorre uma conversa inteira e devolve todas as telas (listas de Reply) pelas quais a cliente passou."""
+    screens = []
+    for step in (lambda: c.send("/start"), lambda: c.press("Agendar"), lambda: c.press("Manicure"), lambda: c.press(""),
+                 lambda: c.press(":"), lambda: c.send(phone=PHONE), lambda: c.send("Maria Souza"), lambda: c.press("Confirmar"),
+                 lambda: c.press("Meus horários"), lambda: c.press("Cancelar 1")):
+        step()
+        screens.append(list(c.last))
+    return screens
+
+
+def test_every_screen_respects_whatsapp_limits(db):
+    """Botões de até 20 caracteres, descrição de até 72, no máximo 10 opções por tela: assim o WhatsApp entra sem refazer a conversa."""
+    from app.bot.types import MAX_BUTTON_TEXT, MAX_DESCRIPTION, MAX_OPTIONS
+    for screen in walk_flow(Chat(db)):
+        for reply in screen:
+            options = [b for row in reply.buttons for b in row]
+            assert len(options) <= MAX_OPTIONS, [b.text for b in options]
+            for b in options:
+                assert len(b.text) <= MAX_BUTTON_TEXT, (len(b.text), b.text)
+                assert len(b.description or "") <= MAX_DESCRIPTION
+
+
+def test_long_service_names_get_a_short_title_and_a_full_description(db):
+    db.add(Service(name="Alongamento de unhas em fibra de vidro com decoração", price_cents=18000, duration_minutes=120))
+    db.flush()
+    c = Chat(db)
+    c.send("/start"); c.press("Agendar")
+    b = next(b for b in c.buttons() if b.data.startswith("svc:") and b.text.startswith("Alongamento"))
+    assert len(b.text) <= 20 and b.text.endswith("…")
+    assert "Alongamento de unhas em fibra" in b.description and len(b.description) <= 72
+
+
+def test_many_services_and_days_are_capped(db):
+    db.add_all(Service(name=f"Serviço {i:02d}", price_cents=1000, duration_minutes=30) for i in range(15))
+    db.flush()
+    c = Chat(db)
+    c.send("/start"); c.press("Agendar")
+    assert len([b for b in c.buttons() if b.data.startswith("svc:")]) == engine.MAX_SERVICES
+    c.press("Serviço 00")
+    assert len([b for b in c.buttons() if b.data.startswith("day:")]) <= engine.MAX_DAYS
+
+
+def test_times_are_paged_with_a_more_button(db, monkeypatch):
+    monkeypatch.setattr(engine, "RATE_PER_MINUTE", 1000)   # este teste navega muito; o limite é testado à parte
+    c = Chat(db)
+    c.send("/start"); c.press("Agendar"); c.press("Manicure")
+    c.send(data=next(b.data for b in c.buttons() if b.data.startswith("day:") and not b.text.startswith("Hoje")))
+    first = [b.text for b in c.buttons() if b.data.startswith("time:")]
+    assert len(first) == engine.TIMES_PER_PAGE and any(b.data == "more:1" for b in c.buttons())
+    c.press("Mais horários")
+    second = [b.text for b in c.buttons() if b.data.startswith("time:")]
+    assert second and set(first).isdisjoint(second)                          # outra página, outros horários
+    # chega ao fim e volta ao começo (circular)
+    for _ in range(10):
+        c.press("Mais horários")
+    assert c.conv().state == "choose_time"
+    c.press(":")
+    assert "Confira" in c.text() or c.last[0].ask_contact                    # um horário da página foi aceito
+
+
+def test_stale_or_forged_more_button_is_refused(db):
+    c = Chat(db)
+    assert texts.EXPIRED in c.send(data="more:1")[0].text
+    c.send("/start"); c.press("Agendar"); c.press("Manicure")
+    assert texts.EXPIRED in c.send(data="more:1")[0].text                    # ainda no passo de escolher o dia
+    assert texts.EXPIRED in c.send(data="more:abc")[0].text
+
+
+def test_the_owner_is_notified_in_the_background_without_making_the_client_wait(db, monkeypatch):
+    import threading
+    monkeypatch.undo()                                                       # usa o run_in_background de verdade
+    from app.bot import engine as eng
+    started, release = threading.Event(), threading.Event()
+    def slow_notify(appointment_id, via="bot"):
+        started.set(); release.wait(5)                                       # o aviso "demora" até liberarmos
+    monkeypatch.setattr(owner_notify, "notify_owner_booking", slow_notify)
+    c = Chat(db)
+    book_until_confirm(c); c.send("Maria Souza")
+    c.press("Confirmar")                                                     # volta mesmo com o aviso travado
+    assert "✅ Agendado!" in c.text() and appointments(db)
+    assert started.wait(2)                                                   # o aviso foi disparado...
+    release.set()                                                            # ...e termina depois, sem bloquear ninguém
+
+
+def test_a_failing_background_task_never_breaks_the_client(db, caplog, monkeypatch):
+    monkeypatch.undo()
+    import logging
+    def boom(*a): raise RuntimeError("telegram fora do ar")
+    t = engine.run_in_background(boom)
+    t.join(2)
+    assert not t.is_alive()

@@ -27,6 +27,23 @@ def day_label(day: date, today: date) -> str:
     return f"{prefix} {day:%d/%m}"
 
 
+# Rótulos de botões: até 20 caracteres (limite do WhatsApp), então já valem nos dois canais.
+BTN_BOOK = "💅 Agendar horário"
+BTN_MINE = "🗓 Meus horários"
+BTN_MENU = "⬅️ Menu"
+BTN_CONFIRM = "✅ Confirmar"
+BTN_OTHER_TIME = "📅 Outro horário"
+BTN_OTHER_DAY = "📅 Outro dia"
+BTN_MORE_TIMES = "➡️ Mais horários"
+BTN_YES_CANCEL = "Sim, cancelar"
+BTN_NO = "Não"
+
+
+def short(text: str, limit: int = 20) -> str:
+    """Corta com reticências para caber no título de um botão."""
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
 def greeting(name: str | None) -> str:
     hello = f"Olá, {name}! 👋" if name else "Olá! 👋"
     return f"{hello}\nSou o assistente de agendamentos de {settings.business_name}. Como posso ajudar?"

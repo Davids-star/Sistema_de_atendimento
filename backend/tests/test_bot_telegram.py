@@ -90,13 +90,62 @@ def test_process_update_sends_the_menu_for_start(wire):
     assert [b["callback_data"] for b in sent[0]["reply_markup"]["inline_keyboard"][0] + sent[0]["reply_markup"]["inline_keyboard"][1]] == ["book", "mine"]
 
 
-def test_button_clicks_are_acknowledged_and_old_buttons_removed(wire):
+def test_a_click_edits_the_message_in_place_with_a_single_main_call(wire):
     tg.process_update(msg("/start", uid=1))
     wire.clear()
     tg.process_update(click("book", uid=2))
-    assert methods(wire)[:2] == ["answerCallbackQuery", "editMessageReplyMarkup"]
-    assert wire[1][1]["reply_markup"] == {"inline_keyboard": []}              # botões antigos saem: ninguém toca duas vezes
-    assert "sendMessage" in methods(wire)
+    names = methods(wire)
+    assert "answerCallbackQuery" in names                                    # tira o "relógio" do botão
+    assert names.count("editMessageText") == 1 and "sendMessage" not in names   # 1 chamada principal, não 3
+    edit = next(p for m, p in wire if m == "editMessageText")
+    assert edit["chat_id"] == 555 and edit["message_id"] == 9 and "Qual serviço" in edit["text"]
+    assert "inline_keyboard" in edit["reply_markup"] and "parse_mode" not in edit
+
+
+def test_edit_without_buttons_also_removes_the_old_buttons(wire):
+    tg.process_update(msg("/start", uid=1))
+    tg.process_update(click("book", uid=2)); tg.process_update(click("svc:1", uid=3)) if False else None
+    from app.bot.types import Reply
+    payload = tg._edit_payload(555, 9, Reply("só texto"))
+    assert "reply_markup" not in payload and payload["text"] == "só texto"   # sem reply_markup, o Telegram tira os botões
+
+
+def test_contact_request_cannot_be_an_edit_so_it_sends_a_new_message(wire, monkeypatch):
+    from app.bot import engine as eng
+    from app.bot.types import Reply
+    monkeypatch.setattr(eng, "handle", lambda db, inc: [Reply("preciso do número", ask_contact=True)])
+    tg.process_update(click("time:20300101T1200", uid=5))
+    names = methods(wire)
+    assert "editMessageReplyMarkup" in names and "sendMessage" in names and "editMessageText" not in names
+    sent = next(p for m, p in wire if m == "sendMessage")
+    assert sent["reply_markup"]["keyboard"][0][0]["request_contact"] is True
+
+
+def test_if_the_edit_fails_the_reply_is_sent_as_a_new_message(monkeypatch, db):
+    monkeypatch.setattr(settings, "customer_bot_token", "999:CUSTOMER-SECRET")
+    monkeypatch.setattr(tg, "SessionLocal", lambda: nullcontext(db))
+    calls = []
+    def fake(method, payload, timeout=15):
+        calls.append(method)
+        return None if method == "editMessageText" else {"ok": True, "result": []}   # a edição falhou (ex.: mensagem apagada)
+    monkeypatch.setattr(tg, "call", fake)
+    tg.process_update(msg("/start", uid=1)); calls.clear()
+    tg.process_update(click("book", uid=2))
+    assert "editMessageText" in calls and "sendMessage" in calls               # não deixa a cliente sem resposta
+
+
+def test_the_connection_is_reused_across_calls():
+    import requests as rq
+    assert isinstance(tg._session, rq.Session)
+    adapter = tg._session.get_adapter("https://api.telegram.org")
+    assert adapter.max_retries.connect == 2 and adapter.max_retries.read == 0   # tenta de novo só ao CONECTAR: nunca duplica mensagem
+
+
+def test_responses_log_their_timing_without_content(wire, caplog):
+    with caplog.at_level(logging.INFO):
+        tg.process_update(msg("/start", uid=1))
+    line = next(r.getMessage() for r in caplog.records if "resposta em" in r.getMessage())
+    assert "cérebro" in line and "envio" in line and "assistente" not in line   # só tempos, nunca o texto da conversa
 
 
 def test_group_messages_produce_no_traffic(wire):
@@ -114,7 +163,7 @@ def test_the_telegram_redelivering_an_update_does_not_answer_twice(wire):
 def test_token_never_appears_in_logs(monkeypatch, caplog):
     monkeypatch.setattr(settings, "customer_bot_token", "999:CUSTOMER-SECRET")
     def boom(url, **k): raise requests.ConnectionError(f"falha em {url}")
-    monkeypatch.setattr(tg.requests, "post", boom)
+    monkeypatch.setattr(tg._session, "post", boom)
     with caplog.at_level(logging.DEBUG):
         assert tg.call("sendMessage", {"chat_id": 1, "text": "x"}) is None
     assert "CUSTOMER-SECRET" not in caplog.text
@@ -122,7 +171,7 @@ def test_token_never_appears_in_logs(monkeypatch, caplog):
 
 def test_no_token_means_no_calls(monkeypatch):
     monkeypatch.setattr(settings, "customer_bot_token", "")
-    monkeypatch.setattr(tg.requests, "post", lambda *a, **k: pytest.fail("não deveria chamar a rede"))
+    monkeypatch.setattr(tg._session, "post", lambda *a, **k: pytest.fail("não deveria chamar a rede"))
     assert tg.call("sendMessage", {"chat_id": 1}) is None
 
 

@@ -7,6 +7,7 @@ forjado nunca causa estrago.
 """
 import logging
 import re
+import threading
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -28,8 +29,10 @@ logger = logging.getLogger("app.bot")
 
 MENU_WORDS = {"/start", "/menu", "menu", "oi", "olá", "ola", "início", "inicio", "voltar", "recomeçar"}
 MAX_TEXT = 200
-RATE_PER_MINUTE = 30
-SLOTS_SHOWN = 16
+RATE_PER_MINUTE = 15
+TIMES_PER_PAGE = 7     # 7 horários + "Mais horários" + "Outro dia" + "Menu" = 10 opções (limite do WhatsApp)
+MAX_SERVICES = 9
+MAX_DAYS = 9
 
 
 def _now() -> datetime:
@@ -41,7 +44,19 @@ def _today() -> date:
 
 
 def _menu_buttons() -> list[list[Button]]:
-    return [[Button("💅 Agendar um horário", "book")], [Button("🗓 Meus agendamentos", "mine")]]
+    return [[Button(texts.BTN_BOOK, "book")], [Button(texts.BTN_MINE, "mine")]]
+
+
+def run_in_background(fn, *args) -> threading.Thread:
+    """Executa algo sem fazer a cliente esperar (ex.: avisar o dono). Falhas aqui nunca chegam à cliente."""
+    def runner():
+        try:
+            fn(*args)
+        except Exception:
+            logger.exception("falha em tarefa de segundo plano")
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    return thread
 
 
 # ---------------------------------------------------------------- entrada
@@ -121,7 +136,7 @@ def _route(db: Session, conv: Conversation, inc: Incoming) -> list[Reply]:
 
     if inc.data:
         action, _, arg = inc.data.partition(":")
-        handler = {"book": _book, "svc": _choose_service, "day": _choose_day, "time": _choose_time,
+        handler = {"book": _book, "svc": _choose_service, "day": _choose_day, "time": _choose_time, "more": _more_times,
                    "yes": _confirm, "back_days": _back_days, "mine": _mine, "cancel": _ask_cancel,
                    "cancel_yes": _do_cancel}.get(action)
         return handler(db, conv, arg) if handler else [Reply(texts.EXPIRED, _menu_buttons())]
@@ -184,10 +199,12 @@ def _book(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
     services = _active_services(db)
     if not services:
         _reset(conv)
-        return [Reply(texts.NO_SERVICES, [[Button("⬅️ Menu", "menu")]])]
+        return [Reply(texts.NO_SERVICES, [[Button(texts.BTN_MENU, "menu")]])]
     _set(conv, "choose_service")
-    rows = [[Button(f"{s.name} · {texts.duration(s.duration_minutes)} · {texts.money(s.price_cents)}", f"svc:{s.id}")] for s in services]
-    return [Reply(texts.CHOOSE_SERVICE, rows + [[Button("⬅️ Menu", "menu")]])]
+    rows = [[Button(texts.short(s.name), f"svc:{s.id}", f"{s.name} · {texts.duration(s.duration_minutes)} · {texts.money(s.price_cents)}"[:72]
+                    if len(s.name) > 20 else f"{texts.duration(s.duration_minutes)} · {texts.money(s.price_cents)}")]
+            for s in services[:MAX_SERVICES]]
+    return [Reply(texts.CHOOSE_SERVICE, rows + [[Button(texts.BTN_MENU, "menu")]])]
 
 
 def _service(db: Session, service_id: int) -> Service | None:
@@ -209,10 +226,10 @@ def _show_days(db: Session, conv: Conversation, service_id: int) -> list[Reply]:
             if slots_for_day(db, d, service)]
     if not days:
         _reset(conv)
-        return [Reply(texts.NO_DAYS, [[Button("⬅️ Menu", "menu")]])]
-    buttons = [Button(texts.day_label(d, today), f"day:{d.isoformat()}") for d in days[:10]]
+        return [Reply(texts.NO_DAYS, [[Button(texts.BTN_MENU, "menu")]])]
+    buttons = [Button(texts.day_label(d, today), f"day:{d.isoformat()}") for d in days[:MAX_DAYS]]
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
-    return [Reply(texts.CHOOSE_DAY, rows + [[Button("⬅️ Menu", "menu")]])]
+    return [Reply(texts.CHOOSE_DAY, rows + [[Button(texts.BTN_MENU, "menu")]])]
 
 
 def _choose_day(db: Session, conv: Conversation, arg: str) -> list[Reply]:
@@ -227,15 +244,26 @@ def _choose_day(db: Session, conv: Conversation, arg: str) -> list[Reply]:
     return _show_times(db, conv, ctx["service_id"], day)
 
 
-def _show_times(db: Session, conv: Conversation, service_id: int, day: date, intro: str | None = None) -> list[Reply]:
+def _show_times(db: Session, conv: Conversation, service_id: int, day: date, intro: str | None = None, page: int = 0) -> list[Reply]:
     slots = slots_for_day(db, day, _service(db, service_id))
     if not slots:
         _set(conv, "choose_day")
         return [Reply(texts.SLOT_GONE)] + _show_days(db, conv, service_id)
-    buttons = [Button(s.astimezone(TZ).strftime("%H:%M"), f"time:{s.astimezone(timezone.utc).strftime('%Y%m%dT%H%M')}")
-               for s in slots[:SLOTS_SHOWN]]
+    pages = max(1, -(-len(slots) // TIMES_PER_PAGE))
+    page = min(max(page, 0), pages - 1)
+    _set(conv, "choose_time", day=day.isoformat(), page=page)
+    shown = slots[page * TIMES_PER_PAGE:(page + 1) * TIMES_PER_PAGE]
+    buttons = [Button(s.astimezone(TZ).strftime("%H:%M"), f"time:{s.astimezone(timezone.utc).strftime('%Y%m%dT%H%M')}") for s in shown]
     rows = [buttons[i:i + 4] for i in range(0, len(buttons), 4)]
-    return [Reply(intro or texts.CHOOSE_TIME, rows + [[Button("📅 Outro dia", "back_days"), Button("⬅️ Menu", "menu")]])]
+    nav = [Button(texts.BTN_MORE_TIMES, f"more:{(page + 1) % pages}")] if pages > 1 else []
+    return [Reply(intro or texts.CHOOSE_TIME, rows + ([nav] if nav else []) + [[Button(texts.BTN_OTHER_DAY, "back_days"), Button(texts.BTN_MENU, "menu")]])]
+
+
+def _more_times(db: Session, conv: Conversation, arg: str) -> list[Reply]:
+    ctx = conv.context or {}
+    if conv.state != "choose_time" or not arg.isdigit() or not ctx.get("service_id") or not ctx.get("day"):
+        return [Reply(texts.EXPIRED, _menu_buttons())]
+    return _show_times(db, conv, ctx["service_id"], date.fromisoformat(ctx["day"]), page=int(arg))
 
 
 def _back_days(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
@@ -300,7 +328,7 @@ def _show_confirm(db: Session, conv: Conversation) -> list[Reply]:
     start = datetime.fromisoformat(ctx["start"])
     return [Reply(texts.summary(service.name, service.price_cents, service.duration_minutes, start,
                                 client.name if client else None),
-                  [[Button("✅ Confirmar", "yes")], [Button("📅 Outro horário", "back_days"), Button("⬅️ Menu", "menu")]])]
+                  [[Button(texts.BTN_CONFIRM, "yes")], [Button(texts.BTN_OTHER_TIME, "back_days"), Button(texts.BTN_MENU, "menu")]])]
 
 
 def _confirm(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
@@ -319,10 +347,7 @@ def _confirm(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
         return _show_times(db, conv, service.id, start.astimezone(TZ).date(), texts.SLOT_TAKEN)
     _reset(conv)
     db.commit()
-    try:
-        owner_notify.notify_owner_booking(appt.id, via=conv.channel)
-    except Exception:   # avisar o dono é um extra: nunca pode estragar o agendamento do cliente
-        logger.exception("falha ao avisar o dono do agendamento")
+    run_in_background(owner_notify.notify_owner_booking, appt.id, conv.channel)   # a cliente não espera por isso
     return [Reply(texts.booked(service.name, start), _menu_buttons())]
 
 
@@ -341,7 +366,7 @@ def _mine(db: Session, conv: Conversation, _arg: str) -> list[Reply]:
         return [Reply(texts.NOTHING_BOOKED, _menu_buttons())]
     lines = [texts.my_appointment(i, a.service.name, a.starts_at, a.status) for i, a in enumerate(items, 1)]
     rows = [[Button(f"❌ Cancelar {i}", f"cancel:{a.id}")] for i, a in enumerate(items, 1)]
-    return [Reply("Seus próximos agendamentos:\n\n" + "\n".join(lines), rows + [[Button("⬅️ Menu", "menu")]])]
+    return [Reply("Seus próximos agendamentos:\n\n" + "\n".join(lines), rows + [[Button(texts.BTN_MENU, "menu")]])]
 
 
 def _own(db: Session, conv: Conversation, raw_id: str) -> Appointment | None:
@@ -356,7 +381,7 @@ def _ask_cancel(db: Session, conv: Conversation, arg: str) -> list[Reply]:
     if appt is None:
         return [Reply(texts.CANNOT_CANCEL, _menu_buttons())]
     return [Reply(f"Cancelar {appt.service.name}, {texts.when(appt.starts_at)}?",
-                  [[Button("Sim, cancelar", f"cancel_yes:{appt.id}"), Button("Não", "mine")]])]
+                  [[Button(texts.BTN_YES_CANCEL, f"cancel_yes:{appt.id}"), Button(texts.BTN_NO, "mine")]])]
 
 
 def _do_cancel(db: Session, conv: Conversation, arg: str) -> list[Reply]:

@@ -2,10 +2,18 @@
 from dataclasses import dataclass, field
 
 
+# Limites dos canais que o bot respeita desde já (o mais apertado vence), para o WhatsApp entrar sem refazer a conversa:
+MAX_BUTTON_TEXT = 20    # WhatsApp: título de botão de resposta (até 20) e de linha de lista (até 24)
+MAX_DESCRIPTION = 72    # WhatsApp: descrição de linha de lista
+MAX_OPTIONS = 10        # WhatsApp: no máximo 10 linhas numa lista (3 se forem botões de resposta)
+MAX_DATA_BYTES = 64     # Telegram: callback_data
+
+
 @dataclass
 class Button:
-    text: str
-    data: str   # identifica a opção. Máx. 64 bytes (limite do Telegram), por isso é curto: "svc:3", "day:2030-01-07"
+    text: str                      # título curto (até 20 caracteres)
+    data: str                      # identifica a opção ("svc:3", "day:2030-01-07"); até 64 bytes
+    description: str | None = None # detalhe opcional (ex.: duração e preço). Telegram junta ao título; WhatsApp mostra abaixo
 
 
 @dataclass
