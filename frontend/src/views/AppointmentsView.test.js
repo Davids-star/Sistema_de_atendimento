@@ -97,6 +97,58 @@ describe('AppointmentsView', () => {
   })
 })
 
+describe('AppointmentsView: conversar no WhatsApp', () => {
+  const link = () => document.querySelector('a.wa')
+  const decoded = (a) => decodeURIComponent(a.getAttribute('href').split('text=')[1])
+
+  it('o nome do cliente abre o WhatsApp dele com a mensagem pronta', async () => {
+    backend([appt({ client_name: 'Maria da Silva', client_phone: '5511977776666', status: 'confirmed' })])
+    await mountView(AppointmentsView)
+    const a = link()
+    expect(a).not.toBeNull()
+    expect(a.getAttribute('href').startsWith('https://wa.me/5511977776666?text=')).toBe(true)
+    expect(decoded(a)).toContain('Olá, Maria!'); expect(decoded(a)).toContain('Só lembrando do seu horário: Corte, qui, 05/03')
+    expect(a.textContent).toContain('Maria da Silva')
+  })
+
+  it('abre em outra aba e sem dar acesso à janela do painel (noopener noreferrer)', async () => {
+    backend([appt()])
+    await mountView(AppointmentsView)
+    expect(link().getAttribute('target')).toBe('_blank')
+    expect(link().getAttribute('rel')).toBe('noopener noreferrer')
+    expect(link().getAttribute('aria-label')).toBe('Conversar com Ana Souza no WhatsApp')
+  })
+
+  it('a mensagem muda conforme a situação do agendamento', async () => {
+    backend([appt({ id: 1, status: 'pending' }), appt({ id: 2, status: 'cancelled', client_name: 'Bia' }), appt({ id: 3, status: 'no_show', client_name: 'Cris' })])
+    await mountView(AppointmentsView)
+    const texts = [...document.querySelectorAll('a.wa')].map(decoded)
+    expect(texts[0]).toContain('confirmar'); expect(texts[1]).toContain('que foi cancelado'); expect(texts[2]).toContain('Sentimos a sua falta')
+  })
+
+  it('telefone inválido: o nome aparece como texto, sem link', async () => {
+    backend([appt({ client_phone: '123' })])
+    await mountView(AppointmentsView)
+    expect(link()).toBeNull()
+    expect(bodyText()).toContain('Ana Souza')
+  })
+
+  it('nome com símbolos perigosos não escapa do link', async () => {
+    backend([appt({ client_name: 'Ana & phone=5599999999999 #' })])
+    await mountView(AppointmentsView)
+    const url = new URL(link().getAttribute('href'))
+    expect(url.hostname).toBe('wa.me'); expect(url.pathname).toBe('/5511999998888'); expect(url.searchParams.get('phone')).toBeNull()
+  })
+
+  it('o link também aparece na aba "Próximos"', async () => {
+    const soon = new Date(Date.now() + 86400000).toISOString()
+    api.mockImplementation(async (path, o = {}) => (path === '/appointments' && o.params?.upcoming ? [appt({ starts_at: soon, ends_at: soon })] : []))
+    await mountView(AppointmentsView)
+    await clickButton('Próximos')
+    expect(link()).not.toBeNull()
+  })
+})
+
 describe('AppointmentsView: quem cancelou', () => {
   it('mostra quem cancelou e quando, em vermelho, no cartão cancelado', async () => {
     backend([appt({ status: 'cancelled', cancelled_by: 'Maria Souza (cliente, pelo Telegram)', cancelled_at: '2099-03-04T20:36:00Z' })])

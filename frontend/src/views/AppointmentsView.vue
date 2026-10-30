@@ -7,6 +7,7 @@ import { ACTION_LABEL, ACTION_PATH, availableActions, canEdit, CONFIRM_TEXT, NEE
 import { addDays, dayOf, formatDateTime, formatDayLong, startOfWeek, timeOf, todayISO, weekdayShort } from '../utils/datetime'
 import { formatBRL, formatPhone } from '../utils/format'
 import { notify, notifyError } from '../utils/notify'
+import { appointmentWhatsappLink } from '../utils/whatsapp'
 
 const ACTION_ICON = { confirm: 'mdi-check', cancel: 'mdi-close', complete: 'mdi-check-all', no_show: 'mdi-account-off-outline' }
 const ACTION_COLOR = { confirm: 'success', cancel: 'error', complete: 'primary', no_show: 'warning' }
@@ -139,7 +140,11 @@ const openEdit = (a) => { editing.value = a; dialog.value = true }
       </div>
       <div class="info">
         <div class="d-flex flex-wrap align-center ga-2">
-          <span class="client">{{ a.client_name }}</span>
+          <a v-if="appointmentWhatsappLink(a)" class="client wa" :href="appointmentWhatsappLink(a)" target="_blank" rel="noopener noreferrer"
+             :aria-label="`Conversar com ${a.client_name} no WhatsApp`" :title="'Abrir o WhatsApp com uma mensagem pronta'">
+            {{ a.client_name }}<v-icon icon="mdi-whatsapp" size="16" class="wa-icon" />
+          </a>
+          <span v-else class="client">{{ a.client_name }}</span>
           <StatusChip :status="a.status" />
         </div>
         <div class="service">
@@ -213,6 +218,9 @@ const openEdit = (a) => { editing.value = a; dialog.value = true }
 .t2 { font-size: 0.75rem; opacity: 0.6; margin-top: 2px; }
 .info { min-width: 0; flex: 1; }
 .client { font-weight: 600; font-size: 1.02rem; }
+.wa { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; border-bottom: 1px dashed rgba(var(--v-theme-on-surface), 0.35); }
+.wa:hover { color: #1f8f4e; border-bottom-color: #1f8f4e; }
+.wa-icon { color: #1f8f4e; }
 .service { margin-top: 3px; font-size: 0.92rem; }
 .phone { font-size: 0.8rem; opacity: 0.6; margin-top: 2px; }
 .cancelled-by { margin-top: 6px; font-size: 0.8rem; color: rgb(var(--v-theme-error)); }
