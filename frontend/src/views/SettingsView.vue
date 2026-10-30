@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { api, setToken } from '../api'
+import { formatPhone } from '../utils/format'
 import { flattenDays, groupByWeekday, validateIntervals, WEEKDAYS } from '../utils/hours'
 import { formatDateTime, isoToLocalInput, localInputToISO } from '../utils/datetime'
 import { notify, notifyError } from '../utils/notify'
 import { passwordError } from '../utils/password'
+import { phoneError } from '../utils/phone'
 
 // ---------- intervalo dos horários ----------
 const interval = ref(30)
@@ -97,11 +99,27 @@ async function changePassword() {
   finally { pwSaving.value = false }
 }
 
+// ---------- WhatsApp do dono (para onde o bot encaminha quem precisa falar com uma pessoa) ----------
+const contactPhone = ref('')
+const contactSaving = ref(false)
+const contactProblem = computed(() => (contactPhone.value.trim() ? phoneError(contactPhone.value) : ''))
+
+async function saveContact() {
+  contactSaving.value = true
+  try {
+    const r = await api('/settings', { method: 'PUT', body: { contact_phone: contactPhone.value.trim() || null } })
+    contactPhone.value = r.contact_phone ? formatPhone(r.contact_phone) : ''
+    notify(r.contact_phone ? 'WhatsApp de atendimento salvo' : 'WhatsApp de atendimento removido')
+  } catch (e) { notifyError(e) }
+  finally { contactSaving.value = false }
+}
+
 onMounted(async () => {
   api('/auth/me').then((me) => { hasPassword.value = me?.has_password !== false }).catch(() => {})
   try {
     const [s, hours] = await Promise.all([api('/settings'), api('/business-hours')])
     interval.value = s.slot_interval_minutes
+    contactPhone.value = s.contact_phone ? formatPhone(s.contact_phone) : ''
     days.value = groupByWeekday(hours)
   } catch (e) { notifyError(e) }
   loadBlocks()
@@ -123,6 +141,19 @@ onMounted(async () => {
       <v-text-field v-model="interval" label="Outro valor (min)" type="number" hide-details density="compact"
                     style="max-width: 170px" :error="!intervalOk" />
       <v-btn color="primary" :loading="intervalSaving" :disabled="!intervalOk" @click="saveInterval">Salvar</v-btn>
+    </div>
+  </v-card>
+
+  <v-card class="pa-5 mb-5">
+    <div class="section-title">WhatsApp de atendimento</div>
+    <p class="text-body-medium text-medium-emphasis mb-3">
+      Quando a cliente pedir para falar com uma pessoa, o bot manda este número, num botão que abre o WhatsApp.
+      Deixe em branco para o bot só avisar que você vai responder.
+    </p>
+    <div class="d-flex flex-wrap align-start ga-3">
+      <v-text-field v-model="contactPhone" label="WhatsApp (com DDD)" inputmode="tel" hide-details="auto" style="max-width: 260px"
+                    prepend-inner-icon="mdi-whatsapp" :error-messages="contactProblem" />
+      <v-btn color="primary" size="large" :loading="contactSaving" :disabled="!!contactProblem" @click="saveContact">Salvar</v-btn>
     </div>
   </v-card>
 

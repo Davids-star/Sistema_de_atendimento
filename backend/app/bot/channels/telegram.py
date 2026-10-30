@@ -74,6 +74,13 @@ def to_incoming(update: dict) -> Incoming | None:
 
 
 # ---------------------------------------------------------------- cérebro -> Telegram
+def _button(button) -> dict:
+    """Botão de link (abre um endereço) ou de escolha (volta ao bot). O Telegram não aceita os dois juntos."""
+    if button.url:
+        return {"text": _label(button), "url": button.url}
+    return {"text": _label(button), "callback_data": button.data}
+
+
 def _label(button) -> str:
     """No Telegram não há "descrição" separada: juntamos ao título (ex.: "Manicure · 45 min · R$ 45,00")."""
     return f"{button.text} · {button.description}" if button.description else button.text
@@ -85,8 +92,7 @@ def to_payload(chat_id: str, reply: Reply) -> dict:
         payload["reply_markup"] = {"keyboard": [[{"text": "📱 Compartilhar meu número", "request_contact": True}]],
                                    "resize_keyboard": True, "one_time_keyboard": True}
     elif reply.buttons:
-        payload["reply_markup"] = {"inline_keyboard": [[{"text": _label(b), "callback_data": b.data} for b in row]
-                                                       for row in reply.buttons]}
+        payload["reply_markup"] = {"inline_keyboard": [[_button(b) for b in row] for row in reply.buttons]}
     else:
         payload["reply_markup"] = {"remove_keyboard": True}
     return payload

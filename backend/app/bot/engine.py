@@ -8,6 +8,7 @@ forjado nunca causa estrago.
 import logging
 import re
 import threading
+import unicodedata
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -21,7 +22,9 @@ from app.core.config import settings
 from app.models import Appointment, BusinessHours, Client, Conversation, Service, WhatsAppMessage
 from app.models.appointment import ACTIVE_STATUSES
 from app.services import appointments as appt_service
-from app.services import owner_notify
+from app.services import notifications, owner_notify
+from app.services.shop_settings import get_settings
+from app.utils_links import whatsapp_url
 from app.services.availability import TZ, slots_for_day
 from app.services.clients import get_or_create_by_phone, normalize_phone
 
@@ -29,6 +32,10 @@ logger = logging.getLogger("app.bot")
 
 MENU_WORDS = {"/start", "/menu", "menu", "oi", "olá", "ola", "início", "inicio", "voltar", "recomeçar"}
 HOURS_WORDS = {"/horarios", "horarios", "horários", "horario", "horário", "agenda", "expediente", "funcionamento", "vagas"}
+# Palavras que mostram que a pessoa quer falar com alguém (comparadas sem acento e sem maiúsculas).
+HUMAN_WORDS = {"atendente", "humano", "dono", "dona", "gerente", "proprietario", "proprietaria", "reclamacao", "reclamar", "urgente", "pessoa"}
+HANDOFF_ACK_MINUTES = 10   # enquanto o assunto é com o dono, o bot só lembra disso a cada 10 min
+MISSES_BEFORE_OFFER = 2    # "não entendi" seguidos antes de oferecer falar com o dono
 MAX_TEXT = 200
 RATE_PER_MINUTE = 15
 TIMES_PER_PAGE = 7     # 7 horários + "Mais horários" + "Outro dia" + "Menu" = 10 opções (limite do WhatsApp)
@@ -45,7 +52,26 @@ def _today() -> date:
 
 
 def _menu_buttons() -> list[list[Button]]:
-    return [[Button(texts.BTN_BOOK, "book")], [Button(texts.BTN_HOURS, "hours")], [Button(texts.BTN_MINE, "mine")]]
+    return [[Button(texts.BTN_BOOK, "book")], [Button(texts.BTN_HOURS, "hours")], [Button(texts.BTN_MINE, "mine")],
+            [Button(texts.BTN_HUMAN, "human")]]
+
+
+def _wants_human(text: str) -> bool:
+    plain = "".join(c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c))
+    return bool(set(re.findall(r"[a-z0-9]+", plain)) & HUMAN_WORDS) or "falar com" in plain
+
+
+def _misses(conv: Conversation, value: int | None) -> int:
+    """Lê (value=None) ou grava o contador de "não entendi" seguidos."""
+    ctx = dict(conv.context or {})
+    if value is None:
+        return int(ctx.get("misses", 0))
+    if value == 0:
+        ctx.pop("misses", None)
+    else:
+        ctx["misses"] = value
+    conv.context = ctx
+    return value
 
 
 def run_in_background(fn, *args) -> threading.Thread:
@@ -131,9 +157,20 @@ def _route(db: Session, conv: Conversation, inc: Incoming) -> list[Reply]:
         return [Reply(texts.BAD_CONTACT, ask_contact=True)]
 
     text = (inc.text or "").strip()[:MAX_TEXT]
+
+    # Enquanto o assunto é com o dono, o bot não fala por cima: só avisa de vez em quando e guarda o que a cliente escreve.
+    if conv.state == "handoff":
+        if inc.data or text.lower() in MENU_WORDS:
+            _reset(conv)   # ela tocou num botão / pediu o menu: volta ao assistente (o pedido ao dono continua aberto no painel)
+        else:
+            return _while_waiting(conv, text)
+
     if text.lower() in MENU_WORDS or inc.data == "menu":
         _reset(conv)
         return [_menu(db, conv)]
+
+    if text and conv.state not in ("ask_name", "ask_phone") and _wants_human(text):
+        return _handoff(db, conv, note=text)
 
     if text.lower() in HOURS_WORDS and conv.state in ("idle", "choose_service"):
         return _hours(db, conv, "")
@@ -142,7 +179,8 @@ def _route(db: Session, conv: Conversation, inc: Incoming) -> list[Reply]:
         action, _, arg = inc.data.partition(":")
         handler = {"book": _book, "svc": _choose_service, "day": _choose_day, "time": _choose_time, "more": _more_times,
                    "yes": _confirm, "back_days": _back_days, "mine": _mine, "hours": _hours, "cancel": _ask_cancel,
-                   "cancel_yes": _do_cancel}.get(action)
+                   "cancel_yes": _do_cancel, "human": _handoff}.get(action)
+        _misses(conv, 0)   # tocou num botão: entendeu o caminho
         return handler(db, conv, arg) if handler else [Reply(texts.EXPIRED, _menu_buttons())]
 
     if conv.state == "ask_phone" and inc.phone:
@@ -154,7 +192,12 @@ def _route(db: Session, conv: Conversation, inc: Incoming) -> list[Reply]:
     if conv.state == "ask_name":
         return [Reply(texts.ASK_NAME)]
     if conv.state == "idle":
-        return [_menu(db, conv)]
+        if not text:   # ex.: só compartilhou o contato
+            return [_menu(db, conv)]
+        misses = _misses(conv, _misses(conv, None) + 1)
+        if misses >= MISSES_BEFORE_OFFER:   # não estamos conseguindo ajudar: oferece uma pessoa
+            return [Reply(texts.HANDOFF_OFFER, [[Button(texts.BTN_HUMAN, "human")], [Button(texts.BTN_MENU, "menu")]])]
+        return [Reply(texts.NOT_UNDERSTOOD, _menu_buttons())]
     return [Reply(texts.USE_BUTTONS)] + _current_step(db, conv)
 
 
@@ -192,6 +235,38 @@ def _current_step(db: Session, conv: Conversation) -> list[Reply]:
     if conv.state == "confirm":
         return _show_confirm(db, conv)
     return [_menu(db, conv)]
+
+
+# ---------------------------------------------------------------- falar com o dono
+def _while_waiting(conv: Conversation, text: str) -> list[Reply]:
+    if not text:
+        return []   # só compartilhou o contato ou mandou algo sem texto: nada a responder
+    conv.handoff_note = "".join(c for c in text if c.isprintable())[:200] or conv.handoff_note   # o dono vê a última mensagem
+    ack = (conv.context or {}).get("ack_at")
+    if ack and _now() - datetime.fromisoformat(ack) < timedelta(minutes=HANDOFF_ACK_MINUTES):
+        return []   # já avisamos há pouco: silêncio, para não falar por cima do dono
+    conv.context = {**(conv.context or {}), "ack_at": _now().isoformat()}
+    return [Reply(texts.HANDOFF_WAIT, [[Button(texts.BTN_MENU, "menu")]])]
+
+
+def _handoff(db: Session, conv: Conversation, _arg: str = "", note: str | None = None) -> list[Reply]:
+    """A cliente quer falar com uma pessoa: avisa o dono (uma vez por pedido) e entrega o contato dele."""
+    first = not conv.needs_human
+    clean = ("".join(c for c in (note or "") if c.isprintable()).strip()[:200]) or None
+    if first:
+        conv.needs_human, conv.handoff_at = True, _now()
+    if clean:
+        conv.handoff_note = clean
+    conv.state, conv.context = "handoff", {"ack_at": _now().isoformat()}
+    if first:
+        client = _client(db, conv)
+        notifications.handoff_requested(db, conv, client.name if client else None, (client.phone if client else None) or conv.phone,
+                                        conv.handoff_note)
+        db.commit()   # o aviso externo (e-mail/Telegram) lê esta conversa em outra sessão
+        run_in_background(owner_notify.notify_owner_handoff, conv.id)
+    link = whatsapp_url(get_settings(db).contact_phone, texts.HANDOFF_WHATSAPP_TEXT)
+    buttons = ([[Button(texts.BTN_WHATSAPP, "", url=link)]] if link else []) + [[Button(texts.BTN_MENU, "menu")]]
+    return [Reply(texts.handoff_done(bool(link)), buttons)]
 
 
 # ---------------------------------------------------------------- horários de atendimento

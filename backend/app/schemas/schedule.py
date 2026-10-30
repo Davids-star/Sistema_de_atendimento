@@ -56,10 +56,21 @@ class BlockedTimeOut(BaseModel):
 class SettingsOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     slot_interval_minutes: int
+    contact_phone: str | None = None   # WhatsApp do dono para onde o bot encaminha quem precisa falar com uma pessoa
 
 
 class SettingsUpdate(BaseModel):
-    slot_interval_minutes: int = Field(ge=5, le=240)
+    """Só o que for enviado é alterado. `contact_phone` vazio (ou null) apaga o número."""
+    slot_interval_minutes: int | None = Field(default=None, ge=5, le=240)
+    contact_phone: str | None = Field(default=None, max_length=25)
+
+    @model_validator(mode="after")
+    def _something(self):
+        if not self.model_fields_set:
+            raise ValueError("Informe ao menos um campo")
+        if "slot_interval_minutes" in self.model_fields_set and self.slot_interval_minutes is None:
+            raise ValueError("slot_interval_minutes não pode ser nulo")
+        return self
 
 
 class AvailabilityOut(BaseModel):

@@ -88,8 +88,12 @@ def test_business_hours_validation(client, auth):
         assert client.put("/api/v1/business-hours", json=body, headers=auth).status_code == 422
 
 
-def test_settings_default_and_update(client, auth):
-    assert client.get("/api/v1/settings", headers=auth).json() == {"slot_interval_minutes": 30}
+def test_settings_default_and_update(client, auth, db):
+    from app.services.shop_settings import get_settings
+    row = get_settings(db)
+    row.slot_interval_minutes, row.contact_phone = 30, None            # fixa o estado: o banco real pode ter valores do dono
+    db.flush()
+    assert client.get("/api/v1/settings", headers=auth).json() == {"slot_interval_minutes": 30, "contact_phone": None}
     assert client.get("/api/v1/settings").status_code == 401
     assert client.put("/api/v1/settings", json={"slot_interval_minutes": 45}, headers=auth).status_code == 200
     assert client.put("/api/v1/settings", json={"slot_interval_minutes": 1}, headers=auth).status_code == 422

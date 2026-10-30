@@ -31,3 +31,8 @@ export function appointmentMessage(a) {
 }
 
 export const appointmentWhatsappLink = (a) => whatsappLink(a.client_phone, appointmentMessage(a))
+
+
+// Mensagem do dono para quem pediu atendimento (abre o WhatsApp da cliente já escrita).
+export const handoffMessage = (name) =>
+  `Olá${firstName(name) ? `, ${firstName(name)}` : ''}! Aqui é do ${BRAND.name}. Vi que você pediu para falar com a gente. Como posso ajudar?`

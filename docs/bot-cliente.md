@@ -86,3 +86,23 @@ No WhatsApp, mensagens que o sistema inicia fora da janela de 24 horas exigem mo
 - **Agendamentos**: o que está/foi agendado, **sem os cancelados** (o texto abaixo informa quantos foram cancelados).
 - **Clientes atendidos**: só quem teve ao menos um atendimento **concluído** no período. Cancelado, ausente, pendente e confirmado não contam.
 - **Clientes novos**: pessoas **cadastradas** no período (ainda não significa que foram atendidas).
+
+## Falar com o dono (encaminhamento)
+Quando a cliente precisa de uma pessoa, o bot passa a conversa para você.
+
+**Como ela pede:**
+- toca em **🙋 Falar com o dono** no menu;
+- escreve palavras como *atendente*, *humano*, *dono/dona*, *gerente*, *reclamação*, *urgente*, *pessoa* ou *"falar com…"*;
+- ou o bot **não entende duas mensagens seguidas**: ele então oferece o botão (não encaminha sozinho).
+
+**O que acontece:**
+1. A cliente recebe a confirmação e, se você cadastrou o número em **Configurações → WhatsApp de atendimento**, um botão **💬 Chamar no WhatsApp** com uma mensagem pronta. Sem número, o bot diz que você responde assim que puder.
+2. Você é avisado **uma vez por pedido**: no sino do painel, por e-mail e pelo Telegram (se configurado), com nome, celular, canal e o que ela escreveu. Pedidos repetidos enquanto o assunto está aberto não geram aviso novo.
+3. Enquanto o assunto é seu, o **bot fica quieto** (lembra uma vez e só de novo depois de 10 min) e guarda a última mensagem dela para você ver. Se ela tocar em **Menu** ou em qualquer botão, o assistente volta, mas o pedido continua aberto para você.
+4. Na tela **Atendimento** (com contador no menu) você vê quem espera, abre o WhatsApp da cliente com uma mensagem pronta e, resolvido, toca em **Marcar como resolvido**.
+
+**Limitações:**
+- Quem fala pelo **Telegram sem ter informado o celular** não tem WhatsApp para você responder: a tela avisa. Você só consegue falar com ela se ela compartilhar o número.
+- O bot **não repassa mensagens** entre você e a cliente dentro do Telegram: a conversa com você acontece no WhatsApp.
+- No WhatsApp (futuro), o menu passa a ter 4 opções, então será uma **lista** (o WhatsApp só permite 3 botões de resposta).
+- O texto "o dono" fica em `backend/app/bot/texts.py` (`HUMAN`); troque por "a dona" ou "a atendente" se preferir.

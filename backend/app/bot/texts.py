@@ -38,6 +38,9 @@ BTN_OTHER_DAY = "📅 Outro dia"
 BTN_MORE_TIMES = "➡️ Mais horários"
 BTN_YES_CANCEL = "Sim, cancelar"
 BTN_NO = "Não"
+HUMAN = "o dono"   # como o bot chama a pessoa (troque aqui para "a dona", "a atendente"...)
+BTN_HUMAN = "🙋 Falar com o dono"
+BTN_WHATSAPP = "💬 Chamar no WhatsApp"
 
 
 def short(text: str, limit: int = 20) -> str:
@@ -82,6 +85,19 @@ def hours_screen(summary: str | None, free_days: list[str]) -> str:
     free = ("Próximos dias com horário livre: " + ", ".join(free_days) + ".") if free_days else \
            "No momento não há horários livres nos próximos dias."
     return f"🕒 Horários de atendimento\n\n{summary}\n\n{free}\nToque em \"Agendar horário\" para escolher o seu."
+
+
+def handoff_done(has_contact: bool) -> str:
+    base = f"🙋 Certo! Já avisei {HUMAN} e ele vai falar com você."
+    if has_contact:
+        return base + "\n\nSe preferir falar agora, toque no botão abaixo: abre o WhatsApp com uma mensagem pronta."
+    return base + "\n\nEle responde assim que puder."
+
+
+HANDOFF_WAIT = f"{HUMAN.capitalize()} já foi avisado e vai te responder. Se quiser voltar ao assistente, toque em Menu."
+HANDOFF_OFFER = "Não consegui entender o que você precisa. Quer falar com " + HUMAN + "?"
+NOT_UNDERSTOOD = "Não entendi 😅 Use os botões abaixo, por favor."
+HANDOFF_WHATSAPP_TEXT = "Olá! Vim pelo atendimento automático e preciso falar com você."
 
 
 def greeting(name: str | None) -> str:

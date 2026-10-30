@@ -64,3 +64,12 @@ def user_signup(db: Session, user: AdminUser) -> int:
     return notify(db, panel_users(db, owners_only=True), kind="user_signup", title="Novo cadastro aguardando liberação",
                   body=f"{user.name} ({user.email}) criou uma conta e espera a sua liberação.", link="/usuarios",
                   ref=f"signup:{user.id}")
+
+
+def handoff_requested(db: Session, conv, client_name: str | None, phone: str | None, note: str | None) -> int:
+    """A cliente pediu para falar com uma pessoa: todos do painel são avisados (o assunto é de quem atende)."""
+    who = f"{client_name} ({phone})" if client_name and phone else (client_name or phone or f"Conversa pelo {conv.channel.capitalize()}")
+    body = f"{who} pediu para falar com você, pelo {conv.channel.capitalize()}." + (f" Escreveu: “{note}”" if note else "")
+    stamp = int(conv.handoff_at.timestamp() * 1000) if conv.handoff_at else 0   # em milissegundos: dois pedidos nunca se confundem
+    return notify(db, panel_users(db), kind="handoff", title="Cliente quer falar com você", body=body,
+                  link="/atendimento", ref=f"handoff:{conv.id}:{stamp}")

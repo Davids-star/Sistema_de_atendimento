@@ -17,6 +17,7 @@ const routes = [
     children: [
       { path: '', name: 'dashboard', component: () => import('./views/DashboardView.vue') },
       { path: 'agendamentos', name: 'appointments', component: () => import('./views/AppointmentsView.vue') },
+      { path: 'atendimento', name: 'handoff', component: () => import('./views/HandoffView.vue') },
       { path: 'servicos', name: 'services', component: () => import('./views/ServicesView.vue') },
       { path: 'clientes', name: 'clients', component: () => import('./views/ClientsView.vue') },
       { path: 'usuarios', name: 'users', meta: { ownerOnly: true }, component: () => import('./views/UsersView.vue') },

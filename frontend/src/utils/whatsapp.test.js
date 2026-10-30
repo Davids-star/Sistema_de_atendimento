@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appointmentMessage, appointmentWhatsappLink, whatsappLink } from './whatsapp'
+import { appointmentMessage, appointmentWhatsappLink, handoffMessage, whatsappLink } from './whatsapp'
 
 const appt = (over = {}) => ({ client_name: 'Maria da Silva', client_phone: '5511977776666', service_name: 'Manicure',
   starts_at: '2030-01-07T17:00:00Z', status: 'confirmed', ...over })   // 17:00Z = seg 14:00 em São Paulo
@@ -46,4 +46,11 @@ describe('appointmentWhatsappLink', () => {
     expect(decodeURIComponent(link.split('text=')[1])).toContain('Só lembrando do seu horário')
   })
   it('cliente com telefone inválido: sem link', () => expect(appointmentWhatsappLink(appt({ client_phone: '123' }))).toBeNull())
+})
+
+describe('handoffMessage', () => {
+  it('cumprimenta pelo primeiro nome e se apresenta', () => {
+    expect(handoffMessage('Maria da Silva')).toBe('Olá, Maria! Aqui é do Agenda. Vi que você pediu para falar com a gente. Como posso ajudar?')
+  })
+  it('sem nome também funciona', () => expect(handoffMessage(null)).toMatch(/^Olá! Aqui é do Agenda\./))
 })

@@ -6,7 +6,7 @@ import { api, setToken } from '../api'
 import { BRAND } from '../brand'
 import { saveTheme } from '../plugins/vuetify'
 import NotificationBell from '../components/NotificationBell.vue'
-import { resetInbox, startPolling, stopPolling } from '../notifications'
+import { inbox, resetInbox, startPolling, stopPolling } from '../notifications'
 import { setupPush, unregisterDevice } from '../push'
 import { loadUser, resetSession, session } from '../session'
 import { toast } from '../utils/notify'
@@ -21,11 +21,14 @@ const pendingUsers = ref(0)   // só o dono vê: pessoas aguardando liberação
 const nav = [
   { title: 'Dashboard', icon: 'mdi-view-dashboard-outline', to: { name: 'dashboard' }, exact: true },
   { title: 'Agendamentos', icon: 'mdi-calendar-month-outline', to: { name: 'appointments' } },
+  { title: 'Atendimento', icon: 'mdi-message-alert-outline', to: { name: 'handoff' }, badge: 'handoff' },
   { title: 'Serviços', icon: 'mdi-shimmer', to: { name: 'services' } },
   { title: 'Clientes', icon: 'mdi-account-multiple-outline', to: { name: 'clients' } },
   { title: 'Usuários', icon: 'mdi-shield-account-outline', to: { name: 'users' }, ownerOnly: true },
   { title: 'Configurações', icon: 'mdi-cog-outline', to: { name: 'settings' } },
 ]
+// Quantos pedidos de atendimento ainda não lidos (vem dos avisos do sino).
+const waiting = computed(() => inbox.items.filter((n) => n.kind === 'handoff' && !n.read_at).length)
 const visibleNav = computed(() => nav.filter((i) => !i.ownerOnly || admin.value?.is_owner))
 
 const isDark = computed(() => theme.current.value.dark)
@@ -69,7 +72,9 @@ async function logout() {
     <v-list nav>
       <v-list-item v-for="item in visibleNav" :key="item.title" :to="item.to" :exact="item.exact" :prepend-icon="item.icon"
                    :title="item.title" @click="!mdAndUp && (drawer = false)">
-        <template v-if="item.ownerOnly && pendingUsers" #append><span class="nav-badge">{{ pendingUsers }}</span></template>
+        <template v-if="(item.ownerOnly && pendingUsers) || (item.badge === 'handoff' && waiting)" #append>
+          <span class="nav-badge">{{ item.badge === 'handoff' ? waiting : pendingUsers }}</span>
+        </template>
       </v-list-item>
     </v-list>
     <template #append>

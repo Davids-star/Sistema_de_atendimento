@@ -107,3 +107,30 @@ def notify_owner_cancellation(appointment_id: int) -> None:
                 telegram.send_message(settings.telegram_chat_id, text)
     except Exception:
         logger.exception("falha ao avisar o dono do cancelamento")
+
+
+def notify_owner_handoff(conversation_id: int) -> None:
+    """E-mail e Telegram para o dono quando uma cliente pede para falar com ele. Nunca levanta erro."""
+    try:
+        from app.models import Client, Conversation
+        from app.utils_links import whatsapp_url
+        with SessionLocal() as db:
+            conv = db.get(Conversation, conversation_id)
+            if conv is None or not conv.needs_human:
+                return
+            client = db.get(Client, conv.client_id) if conv.client_id else None
+            phone = (client.phone if client else None) or conv.phone
+            link = whatsapp_url(phone, "Olá! Aqui é do atendimento. Vi que você pediu para falar com a gente.") if phone else None
+            text = ("🙋 Cliente quer falar com você\n\n"
+                    f"Nome: {client.name if client else 'ainda não informado'}\n"
+                    f"Celular: {_format_phone(phone)}\n"
+                    f"Canal: {conv.channel.capitalize()}\n"
+                    f"Escreveu: {conv.handoff_note or '(nada além do pedido)'}\n\n"
+                    + (f"Responder no WhatsApp: {link}" if link else "Ela ainda não informou o celular; no painel, em Atendimento, você vê os detalhes.")
+                    + f"\nPainel: {settings.frontend_url.rstrip('/')}/atendimento")
+            for owner in db.scalars(select(AdminUser).where(AdminUser.is_owner, AdminUser.is_active)).all():
+                mailer.send_mail(owner.email, "Cliente quer falar com você", text)
+            if telegram.enabled():
+                telegram.send_message(settings.telegram_chat_id, text)
+    except Exception:
+        logger.exception("falha ao avisar o dono do pedido de atendimento")

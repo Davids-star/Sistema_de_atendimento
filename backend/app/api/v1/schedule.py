@@ -14,6 +14,7 @@ from app.schemas.schedule import (
 )
 from app.services import audit
 from app.services.availability import slots_for_day
+from app.services.clients import normalize_phone
 from app.services.shop_settings import get_settings
 
 router = APIRouter(tags=["schedule"])
@@ -29,10 +30,17 @@ def read_settings(db: Session = Depends(get_db), _: AdminUser = Depends(get_curr
 def update_settings(data: SettingsUpdate, db: Session = Depends(get_db),
                     admin: AdminUser = Depends(get_current_admin)):
     s = get_settings(db)
-    before = s.slot_interval_minutes
-    s.slot_interval_minutes = data.slot_interval_minutes
-    audit.record(db, admin, "update", "settings", 1,
-                 {"before": {"slot_interval_minutes": before}, "after": data.model_dump()})
+    changes = data.model_dump(exclude_unset=True)
+    if "contact_phone" in changes:
+        raw = (changes["contact_phone"] or "").strip()
+        try:
+            changes["contact_phone"] = normalize_phone(raw) if raw else None
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+    before = {k: getattr(s, k) for k in changes}
+    for key, value in changes.items():
+        setattr(s, key, value)
+    audit.record(db, admin, "update", "settings", 1, {"before": before, "after": changes})
     db.commit()
     return s
 

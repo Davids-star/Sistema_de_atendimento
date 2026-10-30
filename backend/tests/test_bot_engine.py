@@ -77,7 +77,7 @@ def appointments(db):
 def test_full_booking_for_a_new_client_on_telegram(db, studio):
     c = Chat(db)
     r = c.send("/start")
-    assert "assistente de agendamentos" in r[0].text and [b.data for b in c.buttons()] == ["book", "hours", "mine"]
+    assert "assistente de agendamentos" in r[0].text and [b.data for b in c.buttons()] == ["book", "hours", "mine", "human"]
 
     c.press("Agendar")
     assert "Qual serviço" in c.text()
@@ -309,7 +309,7 @@ def test_menu_words_reset_the_conversation_anywhere(db):
     book_until_confirm(c)
     c.send("menu")
     assert c.conv().state == "idle" and c.conv().context == {}
-    assert [b.data for b in c.buttons()] == ["book", "hours", "mine"]
+    assert [b.data for b in c.buttons()] == ["book", "hours", "mine", "human"]
 
 
 def test_an_old_conversation_expires(db):
@@ -618,10 +618,10 @@ def set_hours(db, rows):
     db.flush()
 
 
-def test_menu_has_three_clear_options_with_the_right_names(db):
+def test_menu_has_four_clear_options_with_the_right_names(db):
     c = Chat(db)
     c.send("/start")
-    assert [(b.data, b.text) for b in c.buttons()] == [("book", "💅 Agendar horário"), ("hours", "🕒 Horários de atend."), ("mine", "🗓 Meus agendamentos")]
+    assert [(b.data, b.text) for b in c.buttons()] == [("book", "💅 Agendar horário"), ("hours", "🕒 Horários de atend."), ("mine", "🗓 Meus agendamentos"), ("human", "🙋 Falar com o dono")]
 
 
 def test_the_hours_screen_shows_the_studio_schedule_and_the_next_free_days(db):

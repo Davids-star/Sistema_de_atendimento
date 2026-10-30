@@ -9,8 +9,8 @@ const router = useRouter()
 const open = ref(false)
 const osPermission = ref(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
 
-const ICON = { appointment_cancelled: 'mdi-calendar-remove-outline', appointment_booked: 'mdi-calendar-plus', user_signup: 'mdi-account-clock-outline' }
-const COLOR = { appointment_cancelled: 'error', appointment_booked: 'success', user_signup: 'warning' }
+const ICON = { appointment_cancelled: 'mdi-calendar-remove-outline', appointment_booked: 'mdi-calendar-plus', user_signup: 'mdi-account-clock-outline', handoff: 'mdi-message-alert-outline' }
+const COLOR = { appointment_cancelled: 'error', appointment_booked: 'success', user_signup: 'warning', handoff: 'warning' }
 const badge = computed(() => (inbox.unread > 99 ? '99+' : inbox.unread))
 
 async function openItem(item) {

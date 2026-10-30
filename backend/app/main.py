@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI
 
 from app.api import health
-from app.api.v1 import appointments, auth, clients, dashboard, devices, notifications, schedule, services, users
+from app.api.v1 import appointments, auth, clients, conversations, dashboard, devices, notifications, schedule, services, users
 from fastapi.responses import JSONResponse
 
 from app.core.logging import setup_logging
@@ -49,6 +49,7 @@ api_v1.include_router(dashboard.router)
 api_v1.include_router(users.router)
 api_v1.include_router(notifications.router)
 api_v1.include_router(devices.router)
+api_v1.include_router(conversations.router)
 app.include_router(api_v1)
 
 

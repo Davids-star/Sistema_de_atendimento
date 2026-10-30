@@ -100,4 +100,13 @@ describe('NotificationBell', () => {
     await open()
     expect(bodyText()).not.toContain('Ativar avisos')
   })
+
+  it('aviso de pedido de atendimento tem o ícone de mensagem e abre a tela Atendimento', async () => {
+    const r = makeRouter(); r.addRoute({ path: '/atendimento', component: { template: '<i/>' } })
+    load([item(5, { kind: 'handoff', title: 'Cliente quer falar com você', link: '/atendimento' })])
+    await open(r)
+    expect(document.querySelector('.bell-card .mdi-message-alert-outline')).not.toBeNull()
+    document.querySelector('.bell-card .v-list-item').click(); await flushPromises()
+    await vi.waitFor(() => expect(r.currentRoute.value.path).toBe('/atendimento'))
+  })
 })

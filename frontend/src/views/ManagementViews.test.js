@@ -198,4 +198,44 @@ describe('SettingsView', () => {
       expect(calls('POST', '/auth/change-password')[0][1].body).toEqual({ current_password: null, new_password: 'senha-nova-forte-1' })
     })
   })
+
+  describe('WhatsApp de atendimento', () => {
+    const open = async (settings = { slot_interval_minutes: 30, contact_phone: '5511988887777' }) => {
+      api.mockImplementation(async (path, o = {}) => {
+        if (path === '/settings') return o.method === 'PUT' ? { slot_interval_minutes: 30, contact_phone: o.body.contact_phone ? '5511988887777' : null } : settings
+        if (path === '/auth/me') return { has_password: true }
+        if (path === '/business-hours' || path === '/blocked-times') return []
+        return {}
+      })
+      await mountView(SettingsView)
+    }
+    const field = () => [...document.querySelectorAll('.v-field')].find((f) => f.textContent.includes('WhatsApp (com DDD)')).querySelector('input')
+    const saveBtn = () => { const card = field().closest('.v-card'); return [...card.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Salvar') }
+
+    it('mostra o número já salvo, formatado', async () => {
+      await open()
+      expect(field().value).toBe('(11) 98888-7777')
+    })
+
+    it('salva só o contato (sem mexer no intervalo) e confirma', async () => {
+      await open({ slot_interval_minutes: 30, contact_phone: null })
+      await typeInto(field(), '(11) 98888-7777')
+      saveBtn().click(); await flushPromises()
+      expect(calls('PUT', '/settings').at(-1)[1].body).toEqual({ contact_phone: '(11) 98888-7777' })
+    })
+
+    it('número inválido bloqueia o salvamento', async () => {
+      await open({ slot_interval_minutes: 30, contact_phone: null })
+      await typeInto(field(), '123')
+      expect(saveBtn().disabled).toBe(true)
+      expect(bodyText()).toContain('Informe DDD + número')
+    })
+
+    it('apagar o campo remove o número', async () => {
+      await open()
+      await typeInto(field(), '')
+      saveBtn().click(); await flushPromises()
+      expect(calls('PUT', '/settings').at(-1)[1].body).toEqual({ contact_phone: null })
+    })
+  })
 })

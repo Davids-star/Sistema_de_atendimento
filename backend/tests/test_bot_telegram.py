@@ -88,7 +88,7 @@ def test_process_update_sends_the_menu_for_start(wire):
     sent = [p for m, p in wire if m == "sendMessage"]
     assert len(sent) == 1 and sent[0]["chat_id"] == "555" and "assistente de agendamentos" in sent[0]["text"]
     keyboard = sent[0]["reply_markup"]["inline_keyboard"]
-    assert [b["callback_data"] for row in keyboard for b in row] == ["book", "hours", "mine"]
+    assert [b["callback_data"] for row in keyboard for b in row] == ["book", "hours", "mine", "human"]
 
 
 def test_a_click_edits_the_message_in_place_with_a_single_main_call(wire):

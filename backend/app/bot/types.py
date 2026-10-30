@@ -14,6 +14,7 @@ class Button:
     text: str                      # título curto (até 20 caracteres)
     data: str                      # identifica a opção ("svc:3", "day:2030-01-07"); até 64 bytes
     description: str | None = None # detalhe opcional (ex.: duração e preço). Telegram junta ao título; WhatsApp mostra abaixo
+    url: str | None = None         # botão que ABRE um endereço (ex.: o WhatsApp do dono) em vez de enviar uma escolha ao bot
 
 
 @dataclass
