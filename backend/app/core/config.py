@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = ""
     whatsapp_access_token: str = ""
     whatsapp_app_secret: str = ""
+    whatsapp_phone_number_id: str = ""
+    # Chave de API de integração segura para o WhatsApp AI Agent
+    whatsapp_agent_api_key: str = ""
 
 
 settings = Settings()

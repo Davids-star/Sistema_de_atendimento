@@ -5,15 +5,47 @@ Camadas:
   get_current_admin  conta logada E liberada pelo dono  -> rotas do painel
   get_current_owner  dono                               -> gestão de usuários
 """
-from fastapi import Depends, HTTPException, status
+import secrets
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import decode_token_claims, password_version
 from app.db.session import get_db
 from app.models import AdminUser
 
 bearer = HTTPBearer(auto_error=False)
+
+
+def verify_agent_key(
+    x_agent_api_key: str | None = Header(None, alias="X-Agent-API-Key"),
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+) -> str:
+    """Valida a autenticação Machine-to-Machine do WhatsApp AI Agent.
+    
+    Aceita o token via header `X-Agent-API-Key` ou `Authorization: Bearer <key>`.
+    """
+    expected_key = settings.whatsapp_agent_api_key.strip()
+    if not expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Chave de integração do WhatsApp AI Agent não configurada no servidor (WHATSAPP_AGENT_API_KEY).",
+        )
+
+    provided_key = None
+    if x_agent_api_key:
+        provided_key = x_agent_api_key.strip()
+    elif creds and creds.credentials:
+        provided_key = creds.credentials.strip()
+
+    if not provided_key or not secrets.compare_digest(provided_key, expected_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Chave de integração inválida ou ausente",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return provided_key
 
 
 def get_optional_user(

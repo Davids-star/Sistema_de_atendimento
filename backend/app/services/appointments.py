@@ -132,7 +132,8 @@ def create_appointment(db: Session, *, admin: AdminUser | None, client_id: int |
     return appt, warnings
 
 
-def update_appointment(db: Session, admin: AdminUser, appointment_id: int, changes: dict) -> tuple[Appointment, list[str]]:
+def update_appointment(db: Session, admin: AdminUser | None, appointment_id: int, changes: dict,
+                       strict: bool = False) -> tuple[Appointment, list[str]]:
     appt = get_locked(db, appointment_id)
     if appt.status not in ("pending", "confirmed"):
         raise AppointmentError("Só é possível alterar agendamentos pendentes ou confirmados")
@@ -146,6 +147,8 @@ def update_appointment(db: Session, admin: AdminUser, appointment_id: int, chang
     new_start = changes.get("starts_at") or appt.starts_at
     if new_start != appt.starts_at:
         _reject_past(new_start)  # remarcar para o passado também não vale
+    if strict and (new_start != appt.starts_at or (new_service_id is not None and new_service_id != appt.service_id)):
+        _check_strict(db, new_start, service)
     def apply():
         if "notes" in changes:
             appt.notes = changes["notes"]
