@@ -14,6 +14,9 @@ def normalize_phone(raw: str) -> str:
     Aceita números brasileiros com ou sem DDI 55. Lança ValueError se não parecer um telefone.
     """
     digits = re.sub(r"\D", "", raw)
+    # Suporte nativo para identificadores WhatsApp (LID - Linked Identity de 14 a 16 dígitos)
+    if len(digits) in (14, 15, 16):
+        return digits
     explicit_intl = raw.strip().startswith("+")  # com "+", o DDI foi dito de propósito: não adivinhar
     if len(digits) in (10, 11) and not explicit_intl:
         digits = "55" + digits

@@ -1,6 +1,6 @@
 """Configurações lidas de variáveis de ambiente (.env na raiz do projeto)."""
 from pathlib import Path
-
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -10,7 +10,20 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
 
     database_url: str
+    database_url_unpooled: str = ""
     secret_key: str
+
+    @field_validator("database_url", "database_url_unpooled", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        if isinstance(v, str) and v:
+            # Render / Neon costumam fornecer postgres:// ou postgresql://.
+            # O SQLAlchemy 2 com Psycopg 3 exige o driver postgresql+psycopg://
+            if v.startswith("postgres://"):
+                return "postgresql+psycopg://" + v[len("postgres://"):]
+            if v.startswith("postgresql://") and not v.startswith("postgresql+"):
+                return "postgresql+psycopg://" + v[len("postgresql://"):]
+        return v
     access_token_expire_minutes: int = 60
     log_level: str = "INFO"
     business_name: str = "Agenda"   # nome do negócio nos e-mails e mensagens (BUSINESS_NAME no .env)

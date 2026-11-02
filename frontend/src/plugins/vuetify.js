@@ -4,34 +4,66 @@ import { createVuetify } from 'vuetify'
 
 export const THEME_KEY = 'barbearia_theme'
 
-// Preferência salva ('light' | 'dark'); sem ela, segue o tema do sistema operacional.
+// Preferência salva ('light' | 'dark'); sem ela, padrão 'light'.
 export function savedTheme() {
-  try { const v = localStorage.getItem(THEME_KEY); return v === 'light' || v === 'dark' ? v : null } catch { return null }
-}
-export function saveTheme(name) {
-  try { localStorage.setItem(THEME_KEY, name) } catch { /* ignora */ }
+  try {
+    const v = localStorage.getItem(THEME_KEY)
+    return v === 'light' || v === 'dark' ? v : null
+  } catch {
+    return null
+  }
 }
 
-// Paleta neutra: cinzas quentes + ardósia, com verde-sálvia suave como destaque. Serve para qualquer negócio.
+export function saveTheme(name) {
+  try {
+    localStorage.setItem(THEME_KEY, name)
+  } catch {
+    /* ignora */
+  }
+}
+
+// Paleta executiva e acolhedora: Vinho Tinto / Marsala e Bege Nude Quente.
 const light = {
   dark: false,
   colors: {
-    background: '#f5f4f1', surface: '#ffffff', 'surface-variant': '#ebe9e4',
-    primary: '#34444f', secondary: '#5f8b7e', accent: '#5f8b7e',
-    success: '#2f7d5c', warning: '#b7791f', error: '#b4342a', info: '#2c6a8f', neutral: '#a39d92',
+    background: '#f8efe4',
+    surface: '#ffffff',
+    'surface-variant': '#f3e6d8',
+    primary: '#6b1322',
+    'on-primary': '#ffffff',
+    secondary: '#c88a58',
+    accent: '#8c2034',
+    success: '#3c763d',
+    warning: '#d97706',
+    error: '#b22222',
+    info: '#2c6a8f',
+    neutral: '#8e757a',
   },
 }
+
 const dark = {
   dark: true,
   colors: {
-    background: '#101418', surface: '#181e24', 'surface-variant': '#232b33',
-    primary: '#9fc3b8', 'on-primary': '#0f1f1a', secondary: '#86a9c4', accent: '#9fc3b8',
-    success: '#5fc08f', warning: '#e3a94d', error: '#ec7a6c', info: '#7fb2d6', neutral: '#6b7383',
+    background: '#151012',
+    surface: '#20161a',
+    'surface-variant': '#2d1e24',
+    primary: '#e07a8b',
+    'on-primary': '#2a050d',
+    secondary: '#dfa87e',
+    accent: '#e07a8b',
+    success: '#5fc08f',
+    warning: '#e3a94d',
+    error: '#ec7a6c',
+    info: '#7fb2d6',
+    neutral: '#9d878d',
   },
 }
 
 export default createVuetify({
-  theme: { defaultTheme: savedTheme() ?? 'system', themes: { light, dark } },
+  theme: {
+    defaultTheme: savedTheme() ?? 'light',
+    themes: { light, dark },
+  },
   defaults: {
     VCard: { rounded: 'lg', elevation: 0, border: true },
     VBtn: { rounded: 'md', elevation: 0 },

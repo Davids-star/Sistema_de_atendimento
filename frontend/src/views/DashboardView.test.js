@@ -20,19 +20,29 @@ const DAYS = Array.from({ length: 31 }, (_, i) => ({
 }))
 const REVENUE = { group_by: 'day', total_cents: 15500, points: [{ period: '2029-03-05', revenue_cents: 7000, completed_count: 2 }] }
 
-function respond({ stale = [] } = {}) {
+function respond() {
   api.mockImplementation(async (path) => {
     if (path === '/dashboard/summary') return SUMMARY
     if (path === '/dashboard/appointments-by-day') return DAYS
     if (path === '/dashboard/revenue') return REVENUE
-    if (path === '/appointments') return stale
     throw new Error(`rota inesperada ${path}`)
   })
 }
+
 const render = async () => {
   const vuetify = createVuetify({ components, directives })
-  const w = mount({ template: '<v-app><DashboardView /></v-app>', components: { DashboardView } },
-                  { global: { plugins: [vuetify] }, attachTo: document.body })
+  const w = mount(
+    { template: '<v-app><DashboardView /></v-app>', components: { DashboardView } },
+    {
+      global: {
+        plugins: [vuetify],
+        stubs: {
+          'router-link': { template: '<a><slot /></a>' },
+        },
+      },
+      attachTo: document.body,
+    }
+  )
   await flushPromises()
   return w
 }
@@ -40,95 +50,71 @@ const render = async () => {
 beforeEach(() => { api.mockReset(); document.body.innerHTML = '' })
 
 describe('DashboardView', () => {
-  it('mostra os indicadores formatados', async () => {
+  it('mostra os indicadores devolvidos pela API formatados', async () => {
     respond()
     const text = norm((await render()).text())
-    expect(text).toContain('R$ 155,00')      // faturamento registrado
-    expect(text).toContain('R$ 60,00')       // previsto
-    expect(text).toContain('20%')            // taxa de ausência
+    expect(text).toContain('Faturamento Registrado')
+    expect(text).toContain('R$ 155,00')
+    expect(text).toContain('Serviços Mais Realizados')
     expect(text).toContain('Corte')
-    expect(text).toContain('R$ 125,00')      // faturamento do serviço
+    expect(text).toContain('3 vezes')
+    expect(text).toContain('R$ 125,00')
+    expect(text).toContain('Agendamentos')
+    expect(text).toContain('7')
+    expect(text).toContain('Concluídos: 4')
+    expect(text).toContain('Faturamento Previsto')
+    expect(text).toContain('R$ 60,00')
+    expect(text).toContain('Pendentes e Confirmados')
+    expect(text).toContain('Agendamentos por dia')
+    expect(text).toContain('20%')
   })
 
-  it('pede os dados do mês atual à API', async () => {
+  it('pede os dados do período à API', async () => {
     respond()
     await render()
-    const dash = api.mock.calls.filter(([p, o]) => p.startsWith('/dashboard') && /^\d{4}-\d{2}-01$/.test(o.params.date_from))
+    const dash = api.mock.calls.filter(([p]) => p.startsWith('/dashboard'))
     expect(new Set(dash.map(([p]) => p))).toEqual(new Set(['/dashboard/appointments-by-day', '/dashboard/revenue', '/dashboard/summary']))
   })
 
-  it('desenha uma barra por dia e destaca o dia com agendamentos', async () => {
+  it('mostra a visão diária alimentada pelos dados da API', async () => {
     respond()
     const w = await render()
-    expect(w.findAll('.chart')[0].findAll('.col')).toHaveLength(31)
-    expect(w.find('[title="05/03: 2 agendamento(s)"]').exists()).toBe(true)
+    expect(w.text()).toContain('Dia com mais agendamentos')
+    expect(w.findAll('.breakdown tbody tr')).toHaveLength(31)
   })
 
-  it('avisa quando há agendamentos sem desfecho', async () => {
-    respond({ stale: [{ id: 1 }, { id: 2 }, { id: 3 }] })
-    expect(norm((await render()).text())).toContain('3 agendamento(s) já terminaram')
-  })
-
-  it('não mostra o aviso quando está tudo em dia', async () => {
+  it('muda de período através do dropdown', async () => {
     respond()
-    expect(norm((await render()).text())).not.toContain('já terminaram')
+    const w = await render()
+    api.mockClear()
+    respond()
+    const select = w.find('.period-dropdown')
+    await select.setValue('today')
+    await flushPromises()
+    const p = api.mock.calls.find(([path]) => path === '/dashboard/summary')[1].params
+    expect(p.date_from).toBe(p.date_to)
   })
 
-  it('mostra o erro da API', async () => {
-    api.mockRejectedValue(Object.assign(new Error('Sem conexão com o servidor.'), { status: 0 }))
+  it('mostra o erro da API quando a requisição falha', async () => {
+    api.mockRejectedValue(new Error('Sem conexão com o servidor.'))
     expect(norm((await render()).text())).toContain('Sem conexão com o servidor.')
   })
 
-  describe('hoje, quadro dia a dia e valor no gráfico', () => {
-    it('o atalho Hoje pede só o dia de hoje', async () => {
-      respond()
-      await render()
-      api.mockClear(); respond()
-      const hoje = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Hoje')
-      hoje.click(); await flushPromises()
-      const p = api.mock.calls.find(([path]) => path === '/dashboard/summary')[1].params
-      expect(p.date_from).toBe(p.date_to)
-      expect(p.date_from).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  it('não inventa barras ou contagens quando a API retorna um período vazio', async () => {
+    api.mockImplementation(async (path) => {
+      if (path === '/dashboard/summary') return {
+        scheduled_appointments: 0, total_appointments: 0, by_status: { completed: 0 },
+        revenue_cents: 0, expected_revenue_cents: 0, no_show_rate: null, top_services: [],
+      }
+      if (path === '/dashboard/revenue') return { points: [] }
+      if (path === '/dashboard/appointments-by-day') return []
+      throw new Error(`rota inesperada ${path}`)
     })
-
-    it('tocar numa barra escreve o valor do dia acima do gráfico', async () => {
-      respond()
-      const w = await render()
-      const chart = w.findAll('.chart')[1]                                   // gráfico de faturamento
-      expect(norm(w.text())).toContain('Toque ou passe o mouse')
-      await chart.findAll('.col')[4].trigger('click')                        // 05/03
-      expect(norm(w.text())).toContain('05/03: R$ 70,00')
-    })
-  })
-
-  describe('cancelados e clientes atendidos', () => {
-    const card = (w, title) => [...w.findAll('.kpi')].find((k) => k.text().includes(title))
-
-    it('o cartão "Agendamentos" não soma os cancelados e informa quantos foram', async () => {
-      respond()
-      const w = await render()
-      const k = norm(card(w, 'Agendamentos').text())
-      expect(k).toContain('7')                       // 8 no total - 1 cancelado
-      expect(k).toContain('4 concluídos')
-      expect(k).toContain('1 cancelado(s)')
-      expect(k).not.toMatch(/\b8\b/)
-    })
-
-    it('sem cancelados, o texto não menciona cancelamentos', async () => {
-      api.mockImplementation(async (path) => {
-        if (path === '/dashboard/summary') return { ...SUMMARY, scheduled_appointments: 8, by_status: { ...SUMMARY.by_status, cancelled: 0 } }
-        if (path === '/dashboard/appointments-by-day') return DAYS
-        if (path === '/dashboard/revenue') return REVENUE
-        return []
-      })
-      expect(norm(card(await render(), 'Agendamentos').text())).not.toContain('cancelado')
-    })
-
-    it('"Clientes atendidos" explica que só conta atendimento concluído', async () => {
-      respond()
-      const k = norm(card(await render(), 'Clientes atendidos').text())
-      expect(k).toContain('2'); expect(k).toContain('Com atendimento concluído')
-      expect(k).not.toContain('Clientes diferentes no período')
-    })
+    const w = await render()
+    const text = norm(w.text())
+    expect(text).toContain('R$ 0,00')
+    expect(text).toContain('Nenhum serviço concluído neste período.')
+    expect(w.findAll('.spark-bar')).toHaveLength(0)
+    expect(text).not.toContain('0%')
   })
 })

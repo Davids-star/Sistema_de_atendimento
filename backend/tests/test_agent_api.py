@@ -127,7 +127,7 @@ def test_get_availability_service_not_found(client, agent_headers):
 # 4. Localizar e Cadastrar Clientes
 # ----------------------------------------------------------------------
 def test_client_endpoints(client, agent_headers):
-    phone = "11999998888"
+    phone = "11999990099"
 
     # 1. Busca inexistente -> 404
     r = client.get(f"{URL_BASE}/clients/by-phone", params={"phone": phone}, headers=agent_headers)
@@ -143,7 +143,7 @@ def test_client_endpoints(client, agent_headers):
     assert r_create.status_code == 201
     data = r_create.json()["data"]
     assert data["name"] == "Lucas Silva"
-    assert data["phone"] == "5511999998888"
+    assert data["phone"] == f"55{phone}"
     assert data["created"] is True
 
     # 3. Busca existente -> 200

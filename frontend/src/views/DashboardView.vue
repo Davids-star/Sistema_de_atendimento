@@ -1,221 +1,489 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
-import BarChart from '../components/BarChart.vue'
 import DailyBreakdown from '../components/DailyBreakdown.vue'
-import { formatBRL, formatDayMonth, formatPercent } from '../utils/format'
-import { daysBetween, presetRange } from '../utils/period'
+import { formatBRL, formatPercent } from '../utils/format'
+import { presetRange } from '../utils/period'
 
 const PRESETS = [
-  { value: 'today', title: 'Hoje' },
-  { value: 'this_week', title: 'Esta semana' },
-  { value: 'this_month', title: 'Este mês' },
-  { value: 'last_month', title: 'Mês passado' },
-  { value: 'last_30', title: 'Últimos 30 dias' },
-  { value: 'custom', title: 'Personalizado' },
+  { value: 'this_month', title: 'mês' },
+  { value: 'this_week', title: 'semana' },
+  { value: 'today', title: 'hoje' },
 ]
-const MAX_DAYS = 366
-const STATUS_LABEL = { pending: 'Pendentes', confirmed: 'Confirmados', completed: 'Concluídos', no_show: 'Ausências', cancelled: 'Cancelados' }
-const STATUS_COLOR = { pending: 'warning', confirmed: 'success', completed: 'primary', no_show: 'error', cancelled: 'neutral' }
-const statusShare = (n) => (summary.value?.total_appointments ? `${(n / summary.value.total_appointments) * 100}%` : '0%')   // total = todos os status
 
 const preset = ref('this_month')
 const range = ref(presetRange('this_month'))
 const loading = ref(false)
 const error = ref('')
 const summary = ref(null)
-const byDay = ref([])
 const revenue = ref(null)
-const pendingOutcome = ref(0)
-const PENDING_LIMIT = 200
+let request = 0
 
-const rangeError = computed(() => {
-  const { from, to } = range.value
-  if (!from || !to) return 'Informe as duas datas.'
-  if (to < from) return 'A data final deve ser igual ou posterior à inicial.'
-  if (daysBetween(from, to) > MAX_DAYS) return `Período máximo de ${MAX_DAYS} dias.`
-  return ''
-})
+const periodTitle = computed(() => PRESETS.find((p) => p.value === preset.value)?.title ?? '')
 
 function onPreset(value) {
   preset.value = value
-  if (value !== 'custom') { range.value = presetRange(value); load() }
+  range.value = presetRange(value)
+  load()
 }
 
 async function load() {
-  if (rangeError.value) return
+  const mine = ++request
   loading.value = true
   error.value = ''
+  summary.value = null
+  revenue.value = null
   const params = { date_from: range.value.from, date_to: range.value.to }
-  const group_by = daysBetween(range.value.from, range.value.to) > 92 ? 'month' : 'day'
   try {
-    ;[summary.value, byDay.value, revenue.value] = await Promise.all([
+    const [nextSummary, nextRevenue] = await Promise.all([
       api('/dashboard/summary', { params }),
-      api('/dashboard/appointments-by-day', { params }),
-      api('/dashboard/revenue', { params: { ...params, group_by } }),
+      api('/dashboard/revenue', { params: { ...params, group_by: 'day' } }),
     ])
-    const stale = await api('/appointments', { params: { needs_outcome: true, limit: PENDING_LIMIT } })
-    pendingOutcome.value = stale.length
+    if (mine !== request) return
+    summary.value = nextSummary
+    revenue.value = nextRevenue
   } catch (e) {
-    error.value = e.message
+    if (mine === request) error.value = e.message
   } finally {
-    loading.value = false
+    if (mine === request) loading.value = false
   }
 }
 onMounted(load)
 
-const cards = computed(() => {
-  const s = summary.value
-  if (!s) return []
-  return [
-    { title: 'Agendamentos', value: s.scheduled_appointments ?? s.total_appointments, icon: 'mdi-calendar-check',
-      sub: `${s.by_status.completed} concluídos` + (s.by_status.cancelled ? ` · ${s.by_status.cancelled} cancelado(s)` : '') },
-    { title: 'Faturamento registrado', value: formatBRL(s.revenue_cents), icon: 'mdi-cash-check', sub: 'Somente atendimentos concluídos' },
-    { title: 'Faturamento previsto', value: formatBRL(s.expected_revenue_cents), icon: 'mdi-cash-clock', sub: 'Pendentes e confirmados' },
-    { title: 'Taxa de ausência', value: formatPercent(s.no_show_rate), icon: 'mdi-account-cancel-outline',
-      sub: s.no_show_rate === null ? 'Sem atendimentos finalizados' : `${s.by_status.no_show} ausência(s)` },
-    { title: 'Clientes atendidos', value: s.unique_clients, icon: 'mdi-account-multiple-outline', sub: 'Com atendimento concluído' },
-    { title: 'Clientes novos', value: s.new_clients, icon: 'mdi-account-plus-outline', sub: 'Cadastrados no período' },
-  ]
-})
-
-const dayItems = computed(() => byDay.value.map((d) => ({
-  label: formatDayMonth(d.date), value: d.total, tip: `${formatDayMonth(d.date)}: ${d.total} agendamento(s)`,
-})))
-
-// A receita por dia só traz dias com faturamento; completa com zeros para o gráfico ficar contínuo.
-const revenueItems = computed(() => {
-  if (!revenue.value) return []
-  const byPeriod = new Map(revenue.value.points.map((p) => [p.period, p.revenue_cents]))
-  if (revenue.value.group_by === 'month') {
-    return revenue.value.points.map((p) => ({
-      label: `${p.period.slice(5)}/${p.period.slice(2, 4)}`, value: p.revenue_cents, tip: `${p.period}: ${formatBRL(p.revenue_cents)}`,
-    }))
-  }
-  return byDay.value.map((d) => {
-    const v = byPeriod.get(d.date) ?? 0
-    return { label: formatDayMonth(d.date), value: v, tip: `${formatDayMonth(d.date)}: ${formatBRL(v)}` }
-  })
+const topService = computed(() => summary.value?.top_services?.[0] ?? null)
+const sparkBars = computed(() => {
+  const pts = revenue.value?.points ?? []
+  const last6 = pts.slice(-6)
+  if (!last6.length) return []
+  const max = Math.max(...last6.map((p) => p.revenue_cents || 0), 1)
+  return last6.map((p) => Math.max(8, Math.round(((p.revenue_cents || 0) / max) * 100)))
 })
 </script>
 
 <template>
-  <div class="d-flex flex-wrap align-center ga-3 mb-6">
-    <div class="mr-auto">
-      <div class="eyebrow mb-1">Visão geral</div>
-      <h1 class="page-title">Dashboard</h1>
+  <div class="dashboard-container">
+    <v-progress-linear v-if="loading" indeterminate color="primary" height="3" rounded class="mb-3" />
+
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-4" :text="error">
+      <template #append><v-btn variant="text" size="small" @click="load">Tentar novamente</v-btn></template>
+    </v-alert>
+
+    <!-- Linha responsiva para desktop (duas colunas no desktop, uma coluna no celular) -->
+    <div class="dash-grid">
+      <!-- Coluna Principal / Esquerda no Desktop -->
+      <div class="dash-col-left">
+        <!-- 1. CARD HERO: FATURAMENTO REGISTRADO (Vinho com gradiente) -->
+        <div class="card-hero mb-4">
+          <div class="hero-left d-flex align-center ga-3">
+            <div class="hero-icon-box">
+              <v-icon icon="mdi-cash-multiple" size="26" />
+            </div>
+            <div>
+              <div class="hero-label">Faturamento Registrado</div>
+              <div class="hero-value">{{ summary ? formatBRL(summary.revenue_cents) : '—' }}</div>
+              <div class="hero-sub d-flex align-center ga-1">
+                <v-icon icon="mdi-calendar-range" size="14" />
+                <span>{{ periodTitle }} selecionado</span>
+              </div>
+            </div>
+          </div>
+          <div v-if="sparkBars.length" class="hero-sparkline d-flex align-end ga-1" aria-hidden="true">
+            <span v-for="(h, i) in sparkBars" :key="i" class="spark-bar" :style="{ height: h + '%' }"></span>
+          </div>
+          <span v-else-if="revenue" class="hero-empty">Sem faturamento concluído</span>
+        </div>
+
+        <!-- 2. CARD: SERVIÇOS MAIS REALIZADOS -->
+        <div class="app-card service-card mb-4">
+          <div class="card-header service-card-header d-flex align-center justify-space-between mb-3">
+            <div class="service-card-heading d-flex align-center ga-2">
+              <span class="wine-pill-indicator"></span>
+              <span class="card-title">Serviços Mais Realizados</span>
+            </div>
+            <div class="period-toggle">
+              <select :value="preset" class="period-dropdown" @change="onPreset($event.target.value)">
+                <option v-for="p in PRESETS" :key="p.value" :value="p.value">{{ p.title }}</option>
+              </select>
+              <v-icon icon="mdi-chevron-down" size="16" class="select-chevron" />
+            </div>
+          </div>
+
+          <div class="service-content">
+            <div class="service-main">
+              <div class="service-icon-circle">
+                <v-icon icon="mdi-content-cut" color="#6b1322" size="24" />
+              </div>
+              <div v-if="topService" class="service-details">
+                <div class="text-caption text-medium-emphasis text-truncate">
+                  {{ topService.name }} · {{ periodTitle }}
+                </div>
+                <div class="stat-highlight text-wine">
+                  {{ topService.count }} vezes
+                </div>
+              </div>
+              <div v-else class="empty-state">{{ summary ? 'Nenhum serviço concluído neste período.' : '—' }}</div>
+            </div>
+
+            <div v-if="topService" class="service-total">
+              <div class="text-caption text-medium-emphasis">Total faturado nesse serviço</div>
+              <div class="stat-highlight text-green">
+                {{ formatBRL(topService.revenue_cents) }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. DUPLA DE CARDS DE MÉTRICAS LADO A LADO -->
+        <div class="metric-row ga-3 mb-4">
+          <!-- Card Agendamentos -->
+          <router-link :to="{ name: 'appointments' }" class="app-card flex-1-1 metric-card text-decoration-none">
+            <div class="d-flex align-center justify-space-between">
+              <div class="d-flex align-center ga-3">
+                <div class="metric-icon-circle icon-green">
+                  <v-icon icon="mdi-calendar-check-outline" color="#3c763d" size="22" />
+                </div>
+                <div>
+                  <div class="metric-title">Agendamentos</div>
+                  <div class="metric-num">{{ summary?.scheduled_appointments ?? '—' }}</div>
+                  <div class="metric-sub">Concluídos: {{ summary?.by_status?.completed ?? '—' }}</div>
+                </div>
+              </div>
+              <div class="metric-arrow">
+                <v-icon icon="mdi-chevron-right" size="18" color="#7e6367" />
+              </div>
+            </div>
+          </router-link>
+
+          <!-- Card Faturamento Previsto -->
+          <router-link :to="{ name: 'appointments' }" class="app-card flex-1-1 metric-card text-decoration-none">
+            <div class="d-flex align-center justify-space-between">
+              <div class="d-flex align-center ga-3">
+                <div class="metric-icon-circle icon-wine">
+                  <v-icon icon="mdi-sack" color="primary" size="22" />
+                </div>
+                <div>
+                  <div class="metric-title">Faturamento Previsto</div>
+                  <div class="metric-num">{{ summary ? formatBRL(summary.expected_revenue_cents) : '—' }}</div>
+                  <div class="metric-sub">Pendentes e Confirmados</div>
+                </div>
+              </div>
+              <div class="metric-arrow">
+                <v-icon icon="mdi-chevron-right" size="18" color="#7e6367" />
+              </div>
+            </div>
+          </router-link>
+
+          <div class="app-card flex-1-1 metric-card">
+            <div class="d-flex align-center ga-3">
+              <div class="metric-icon-circle icon-wine">
+                <v-icon icon="mdi-account-clock-outline" color="primary" size="22" />
+              </div>
+              <div>
+                <div class="metric-title">Taxa de ausência</div>
+                <div class="metric-num">{{ summary ? formatPercent(summary.no_show_rate) : '—' }}</div>
+                <div class="metric-sub">No período selecionado</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Coluna com o detalhamento diário -->
+      <div class="dash-col-right">
+        <DailyBreakdown />
+      </div>
     </div>
-    <v-btn-toggle class="d-none d-sm-flex" :model-value="preset" mandatory density="comfortable" color="primary"
-                  variant="outlined" divided @update:model-value="onPreset">
-      <v-btn v-for="p in PRESETS" :key="p.value" :value="p.value" size="small">{{ p.title }}</v-btn>
-    </v-btn-toggle>
-    <!-- No celular os 4 botões não cabem: vira uma lista de seleção -->
-    <v-select class="d-sm-none period-select" :model-value="preset" :items="PRESETS" item-title="title" item-value="value"
-              density="compact" hide-details aria-label="Período" @update:model-value="onPreset" />
   </div>
-
-  <v-row v-if="preset === 'custom'" class="mb-1">
-    <v-col cols="12" sm="4" md="3">
-      <v-text-field v-model="range.from" label="De" type="date" hide-details="auto" />
-    </v-col>
-    <v-col cols="12" sm="4" md="3">
-      <v-text-field v-model="range.to" label="Até" type="date" hide-details="auto" :error-messages="rangeError" />
-    </v-col>
-    <v-col cols="12" sm="4" md="3" class="d-flex align-start">
-      <v-btn color="primary" size="large" :disabled="!!rangeError" :loading="loading" @click="load">Aplicar</v-btn>
-    </v-col>
-  </v-row>
-
-  <v-alert v-if="error" type="error" variant="tonal" class="mb-4" :text="error">
-    <template #append><v-btn variant="text" @click="load">Tentar de novo</v-btn></template>
-  </v-alert>
-
-  <v-alert v-if="pendingOutcome > 0" type="warning" variant="tonal" class="mb-4" icon="mdi-clock-alert-outline">
-    <strong>{{ pendingOutcome >= PENDING_LIMIT ? `${PENDING_LIMIT}+` : pendingOutcome }}
-      agendamento(s)</strong> já terminaram e ainda não foram marcados como concluídos ou ausentes.
-    O faturamento e a taxa de ausência só contam atendimentos finalizados.
-    <template #append>
-      <v-btn variant="text" size="small" :to="{ name: 'appointments' }">Revisar</v-btn>
-    </template>
-  </v-alert>
-
-  <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" rounded />
-
-  <template v-if="summary">
-    <div class="grid grid-kpi">
-      <v-card v-for="(c, i) in cards" :key="c.title" class="kpi" :class="{ feature: i === 1 }">
-        <div class="kpi-head">
-          <span class="kpi-icon"><v-icon :icon="c.icon" size="20" /></span>
-          <span class="eyebrow">{{ c.title }}</span>
-        </div>
-        <div class="kpi-value num">{{ c.value }}</div>
-        <div class="kpi-sub">{{ c.sub }}</div>
-      </v-card>
-    </div>
-
-    <div class="grid grid-2 mt-4">
-      <v-card class="pa-5">
-        <div class="section-title mb-4">Agendamentos por dia</div>
-        <BarChart :items="dayItems" />
-      </v-card>
-      <v-card class="pa-5">
-        <div class="d-flex align-baseline mb-4">
-          <div class="section-title mr-auto">Faturamento registrado</div>
-          <div class="text-body-small text-medium-emphasis">Total <strong class="num">{{ formatBRL(revenue?.total_cents) }}</strong></div>
-        </div>
-        <BarChart :items="revenueItems" color="secondary" :format="formatBRL" />
-      </v-card>
-    </div>
-
-    <div class="grid grid-2 mt-4">
-      <DailyBreakdown />
-      <v-card class="pa-5">
-        <div class="section-title mb-4">Situação dos agendamentos</div>
-        <div v-for="(label, key) in STATUS_LABEL" :key="key" class="status-row">
-          <span class="dot" :style="{ background: `rgb(var(--v-theme-${STATUS_COLOR[key]}))` }" />
-          <span class="status-label">{{ label }}</span>
-          <span class="bar-track"><span class="bar-fill" :style="{ width: statusShare(summary.by_status[key]), background: `rgb(var(--v-theme-${STATUS_COLOR[key]}))` }" /></span>
-          <span class="num status-count">{{ summary.by_status[key] }}</span>
-        </div>
-      </v-card>
-    </div>
-
-    <v-card class="pa-5 mt-4">
-      <div class="section-title mb-4">Serviços mais realizados</div>
-      <v-table v-if="summary.top_services.length" density="comfortable">
-        <thead><tr><th>Serviço</th><th class="text-right">Qtd.</th><th class="text-right">Faturamento</th></tr></thead>
-        <tbody>
-          <tr v-for="s in summary.top_services" :key="s.service_id">
-            <td class="font-weight-medium">{{ s.name }}</td><td class="text-right num">{{ s.count }}</td>
-            <td class="text-right num">{{ formatBRL(s.revenue_cents) }}</td>
-          </tr>
-        </tbody>
-      </v-table>
-      <div v-else class="text-body-medium text-medium-emphasis">Nenhum atendimento concluído no período.</div>
-    </v-card>
-  </template>
 </template>
 
 <style scoped>
-/* seletor de período no celular ocupa a largura toda */
-.period-select { flex: 1 1 100%; }
-.kpi { padding: 20px 22px; display: flex; flex-direction: column; gap: 6px; }
-.kpi-head { display: flex; align-items: center; gap: 10px; }
-.kpi-icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
-            background: rgba(var(--v-theme-primary), 0.09); color: rgb(var(--v-theme-primary)); }
-.kpi-value { font-size: 2rem; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; margin-top: 6px; }
-.kpi-sub { font-size: 0.8rem; color: rgba(var(--v-theme-on-surface), 0.6); }
+.dashboard-container {
+  width: 100%;
+}
 
-/* Cartão de destaque (faturamento registrado) */
-.kpi.feature { background: var(--ink); border-color: transparent !important; color: #f3ece0; }
-.kpi.feature .kpi-icon { background: rgba(159, 195, 184, 0.18); color: #bfe0d5; }
-.kpi.feature .kpi-sub { color: rgba(243, 236, 224, 0.62); }
-.v-theme--dark .kpi.feature { background: linear-gradient(145deg, #1f2b27, #171d27); border: 1px solid rgba(159, 195, 184, 0.3) !important; }
+/* Grid responsivo: 1 coluna no celular/tablet, 2 colunas amplas no desktop */
+.dash-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
 
-.status-row { display: grid; grid-template-columns: 10px 110px 1fr 40px; align-items: center; gap: 12px; padding: 7px 0; }
-.dot { width: 10px; height: 10px; border-radius: 50%; }
-.status-label { font-size: 0.9rem; }
-.bar-track { height: 8px; border-radius: 4px; background: rgba(var(--v-theme-on-surface), 0.07); overflow: hidden; }
-.bar-fill { display: block; height: 100%; border-radius: 4px; min-width: 2px; opacity: 0.85; }
-.status-count { text-align: right; font-weight: 600; }
+@media (min-width: 960px) {
+  .dash-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
+.service-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.service-card-heading {
+  min-width: 0;
+}
+
+.service-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: center;
+  min-height: 82px;
+}
+
+.service-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding-right: 16px;
+}
+
+.service-main:only-child {
+  grid-column: 1 / -1;
+  padding-right: 0;
+}
+
+.service-details {
+  min-width: 0;
+  flex: 1;
+  text-align: center;
+}
+
+.service-total {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding-left: 16px;
+  border-left: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  text-align: center;
+}
+
+/* 1. Card de faturamento */
+.card-hero {
+  background: rgb(var(--v-theme-primary));
+  border-radius: 22px;
+  padding: 20px 22px;
+  color: rgb(var(--v-theme-on-primary));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 8px 24px rgba(107, 19, 34, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hero-icon-box {
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+}
+
+.hero-label {
+  font-size: 0.82rem;
+  color: rgba(var(--v-theme-on-primary), 0.82);
+  font-weight: 500;
+}
+
+.hero-value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 2px 0;
+}
+
+.hero-sub {
+  font-size: 0.72rem;
+  color: rgba(var(--v-theme-on-primary), 0.7);
+}
+.hero-empty { font-size: 0.72rem; color: rgba(var(--v-theme-on-primary), 0.75); }
+
+.hero-sparkline {
+  height: 48px;
+  width: 70px;
+  flex-shrink: 0;
+}
+
+.spark-bar {
+  flex: 1;
+  background: rgba(var(--v-theme-on-primary), 0.22);
+  border-radius: 3px 3px 0 0;
+  min-height: 6px;
+}
+
+/* 2. Cartões */
+.app-card {
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-on-surface));
+  border-radius: 20px;
+  padding: 16px 18px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.wine-pill-indicator {
+  display: inline-block;
+  width: 5px;
+  height: 18px;
+  background: rgb(var(--v-theme-primary));
+  border-radius: 4px;
+}
+
+.card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: rgb(var(--v-theme-primary));
+  letter-spacing: -0.01em;
+}
+
+.period-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.period-dropdown {
+  appearance: none;
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.15);
+  border-radius: 12px;
+  padding: 3px 24px 3px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+  cursor: pointer;
+  outline: none;
+}
+
+.select-chevron {
+  position: absolute;
+  right: 6px;
+  pointer-events: none;
+  color: rgb(var(--v-theme-primary));
+}
+
+.service-icon-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(var(--v-theme-primary), 0.1);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.stat-highlight {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-top: 2px;
+}
+
+.text-wine {
+  color: rgb(var(--v-theme-primary));
+}
+
+.text-green {
+  color: rgb(var(--v-theme-success));
+}
+
+/* 3. Métricas duplas */
+.metric-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.metric-card {
+  min-width: 220px;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.metric-icon-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.icon-green {
+  background: rgba(var(--v-theme-success), 0.12);
+}
+
+.icon-wine {
+  background: rgba(var(--v-theme-primary), 0.1);
+}
+
+.metric-title {
+  font-size: 0.74rem;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-weight: 600;
+}
+
+.metric-num {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: rgb(var(--v-theme-on-surface));
+  line-height: 1.15;
+  margin: 1px 0;
+}
+
+.metric-sub {
+  font-size: 0.68rem;
+  color: rgba(var(--v-theme-on-surface), 0.62);
+}
+
+.metric-arrow {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(var(--v-theme-primary), 0.08);
+  display: grid;
+  place-items: center;
+}
+.empty-state { color: rgba(var(--v-theme-on-surface), 0.68); font-size: 0.85rem; }
+
+@media (max-width: 480px) {
+  .metric-card {
+    min-width: 100%;
+  }
+
+  .service-content {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .service-main {
+    padding-right: 0;
+  }
+
+  .service-total {
+    align-self: auto;
+    padding: 12px 0 0;
+    border-left: 0;
+    border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  }
+}
 </style>

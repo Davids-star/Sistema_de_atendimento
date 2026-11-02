@@ -68,6 +68,7 @@ describe('DailyBreakdown', () => {
     expect(bodyRows().length).toBeLessThanOrEqual(6)
     const monthDays = (new Date(to).getTime() - new Date(from).getTime()) / 86400000 + 1
     expect(norm(document.querySelector('.breakdown tfoot').textContent)).toContain(`R$ ${(monthDays * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`)
+    expect(norm(document.querySelector('.peak-day').textContent)).toContain(to.slice(8))
   })
 
   it('as setas andam uma semana (ou um mês) e "Hoje" volta', async () => {

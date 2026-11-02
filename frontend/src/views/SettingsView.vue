@@ -1,12 +1,45 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useTheme } from 'vuetify'
 import { api, setToken } from '../api'
+import { resetInbox } from '../notifications'
+import { saveTheme } from '../plugins/vuetify'
+import { unregisterDevice } from '../push'
+import { resetSession } from '../session'
 import { formatPhone } from '../utils/format'
 import { flattenDays, groupByWeekday, validateIntervals, WEEKDAYS } from '../utils/hours'
 import { formatDateTime, isoToLocalInput, localInputToISO } from '../utils/datetime'
 import { notify, notifyError } from '../utils/notify'
 import { passwordError } from '../utils/password'
 import { phoneError } from '../utils/phone'
+
+const router = useRouter()
+const theme = useTheme()
+
+// ---------- tema ----------
+const isDark = computed(() => theme.current.value.dark)
+function toggleTheme() {
+  const next = isDark.value ? 'light' : 'dark'
+  if (theme.global?.name) {
+    theme.global.name.value = next
+  } else if (theme.name) {
+    theme.name.value = next
+  }
+  saveTheme(next)
+}
+
+// ---------- logout ----------
+const loggingOut = ref(false)
+async function logout() {
+  loggingOut.value = true
+  await unregisterDevice()
+  try { await api('/auth/logout', { method: 'POST' }) } catch { /* descarta de qualquer forma */ }
+  setToken(null)
+  resetSession()
+  resetInbox()
+  router.push({ name: 'login' })
+}
 
 // ---------- intervalo dos horários ----------
 const interval = ref(30)
@@ -217,6 +250,31 @@ onMounted(async () => {
                     :error-messages="pw.confirm && pwProblem ? pwProblem : ''" />
       <v-btn type="submit" color="primary" :loading="pwSaving" :disabled="!pwOk">{{ hasPassword ? 'Alterar senha' : 'Criar senha' }}</v-btn>
     </v-form>
+  </v-card>
+
+  <v-card class="pa-5 mt-5">
+    <div class="section-title">Aparência do painel</div>
+    <p class="text-body-medium text-medium-emphasis mb-3">
+      Escolha entre o tema claro e escuro. A preferência é salva no seu navegador.
+    </p>
+    <v-btn
+      :prepend-icon="isDark ? 'mdi-weather-sunny' : 'mdi-weather-night'"
+      variant="outlined"
+      color="primary"
+      @click="toggleTheme"
+    >
+      {{ isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro' }}
+    </v-btn>
+  </v-card>
+
+  <v-card class="pa-5 mt-5">
+    <div class="section-title">Sair do painel</div>
+    <p class="text-body-medium text-medium-emphasis mb-3">
+      Encerra a sessão atual. Você precisará fazer login novamente para acessar o painel.
+    </p>
+    <v-btn color="error" variant="tonal" prepend-icon="mdi-logout" :loading="loggingOut" @click="logout">
+      Sair da conta
+    </v-btn>
   </v-card>
 </template>
 

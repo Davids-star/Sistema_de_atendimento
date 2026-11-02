@@ -18,30 +18,68 @@ def compute_slots(
     day: date,
     duration_minutes: int,
     hours: list[tuple[time, time]],
-    interval_minutes: int,
+    interval_minutes: int | None,
     busy: list[Interval],
     tz: tzinfo,
     now: datetime,
 ) -> list[datetime]:
     """Horários de início livres em `day`.
 
-    - Os inícios andam de `interval_minutes` em `interval_minutes`, a partir da abertura de cada expediente.
-    - O serviço precisa terminar até o fim do expediente.
-    - `busy` junta bloqueios e agendamentos ativos; encostar (terminar quando o outro começa) é permitido.
+    - Divide o expediente em janelas livres, descontando bloqueios e agendamentos ocupados.
+    - O primeiro horário livre de cada janela começa no início dela (ex.: logo após o término do agendamento anterior).
+    - Os próximos horários dentro da mesma janela avançam pela duração do serviço (ou intervalo configurado).
+    - O serviço precisa terminar antes de fechar a janela / expediente.
     - Horários que já passaram não são oferecidos.
     """
     duration = timedelta(minutes=duration_minutes)
-    step = timedelta(minutes=interval_minutes)
+    step_minutes = interval_minutes or duration_minutes
+    step = timedelta(minutes=step_minutes)
     slots: list[datetime] = []
+
     for start_t, end_t in sorted(hours):
-        cursor = datetime.combine(day, start_t, tzinfo=tz)
-        close = datetime.combine(day, end_t, tzinfo=tz)
-        while cursor + duration <= close:
-            end = cursor + duration
-            if cursor > now and not any(cursor < b_end and end > b_start for b_start, b_end in busy):
-                slots.append(cursor)
-            cursor += step
-    return slots
+        open_dt = datetime.combine(day, start_t, tzinfo=tz)
+        close_dt = datetime.combine(day, end_t, tzinfo=tz)
+
+        # Clampa e filtra ocupações deste expediente
+        relevant_busy: list[Interval] = []
+        for b_start, b_end in busy:
+            s = max(b_start, open_dt)
+            e = min(b_end, close_dt)
+            if s < e:
+                relevant_busy.append((s, e))
+
+        # Mescla intervalos ocupados que se sobrepõem ou encostam
+        relevant_busy.sort(key=lambda x: x[0])
+        merged_busy: list[Interval] = []
+        for s, e in relevant_busy:
+            if not merged_busy:
+                merged_busy.append((s, e))
+            else:
+                last_s, last_e = merged_busy[-1]
+                if s <= last_e:
+                    merged_busy[-1] = (last_s, max(last_e, e))
+                else:
+                    merged_busy.append((s, e))
+
+        # Identifica as janelas livres dentro do expediente
+        free_windows: list[Interval] = []
+        curr = open_dt
+        for b_start, b_end in merged_busy:
+            if curr < b_start:
+                free_windows.append((curr, b_start))
+            curr = max(curr, b_end)
+        if curr < close_dt:
+            free_windows.append((curr, close_dt))
+
+        # Em cada janela livre, os slots iniciam no começo da janela e avançam pelo passo
+        for w_start, w_end in free_windows:
+            cursor = w_start
+            while cursor + duration <= w_end:
+                if cursor > now:
+                    slots.append(cursor)
+                cursor += step
+
+    return sorted(slots)
 
 
 def day_bounds(day: date) -> Interval:
@@ -59,5 +97,9 @@ def slots_for_day(db: Session, day: date, service: Service, now: datetime | None
     appts = db.execute(select(Appointment.starts_at, Appointment.ends_at)
                        .where(Appointment.status.in_(ACTIVE_STATUSES),
                               Appointment.starts_at < day_end, Appointment.ends_at > day_start)).all()
-    return compute_slots(day, service.duration_minutes, hours, get_settings(db).slot_interval_minutes,
+    settings = get_settings(db)
+    # Se slot_interval_minutes configurado for estritamente maior que a duração, respeita a folga do admin;
+    # caso contrário, o passo é determinado pela própria duração do serviço para encadeamento perfeito.
+    interval = settings.slot_interval_minutes if (settings.slot_interval_minutes and settings.slot_interval_minutes > service.duration_minutes) else service.duration_minutes
+    return compute_slots(day, service.duration_minutes, hours, interval,
                          [(s, e) for s, e in [*blocks, *appts]], TZ, now or datetime.now(timezone.utc))

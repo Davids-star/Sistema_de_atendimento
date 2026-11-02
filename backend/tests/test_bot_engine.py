@@ -59,11 +59,11 @@ class Chat:
         return self.db.scalar(select(Conversation).where(Conversation.channel == self.channel, Conversation.external_id == self.external))
 
 
-def book_until_confirm(chat, service="Manicure", with_phone=True):
+def book_until_confirm(chat, service="Manicure", with_phone=True, day=""):
     chat.send("/start")
     chat.press("Agendar")
     chat.press(service)
-    chat.press("")            # primeiro dia disponível
+    chat.press(day)            # primeiro dia disponível se vazio
     chat.press(":")           # primeiro horário
     if with_phone:
         chat.send(phone=PHONE)
@@ -143,7 +143,7 @@ def test_whatsapp_style_channel_already_has_the_phone(db):
 # ---------------------------------------------------------------- horário
 def test_slot_taken_by_someone_else_before_confirming(db):
     c = Chat(db)
-    book_until_confirm(c)
+    book_until_confirm(c, day="Amanhã")
     c.send("Maria Souza")
     ctx = c.conv().context
     service = db.scalar(select(Service).where(Service.name == "Manicure"))

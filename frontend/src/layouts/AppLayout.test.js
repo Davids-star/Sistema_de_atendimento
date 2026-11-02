@@ -25,6 +25,20 @@ const titles = () => [...document.querySelectorAll('.sidebar .v-list-item-title'
 beforeEach(() => { api.mockReset(); resetInbox(); resetSession(); document.body.innerHTML = '' })
 
 describe('AppLayout: menu lateral', () => {
+  it('mostra somente o primeiro nome no cabeçalho', async () => {
+    const w = await open(user({ name: 'Ana Maria Silva' }))
+    expect(norm(w.find('.user-name').text())).toBe('Ana')
+    stopPolling()
+  })
+
+  it('mantém a navegação do computador expandida sem botão hambúrguer', async () => {
+    await open(user())
+    expect(document.querySelector('.sidebar')).not.toBeNull()
+    expect(document.querySelector('.sidebar.v-navigation-drawer--rail')).toBeNull()
+    expect(document.querySelector('.menu-toggle')).toBeNull()
+    stopPolling()
+  })
+
   it('mostra todas as telas do dono, incluindo Atendimento', async () => {
     await open(user())
     expect(titles()).toEqual(['Dashboard', 'Agendamentos', 'Atendimento', 'Serviços', 'Clientes', 'Usuários', 'Configurações'])
@@ -56,6 +70,22 @@ describe('AppLayout: menu lateral', () => {
     await open(user())
     const item = [...document.querySelectorAll('.sidebar .v-list-item')].find((i) => norm(i.textContent).startsWith('Usuários'))
     expect(norm(item.querySelector('.nav-badge').textContent)).toBe('2')
+    stopPolling()
+  })
+
+  it('o pop-up do perfil abre ao clicar no usuário e contém opção de foto e configurações', async () => {
+    const w = await open(user({ name: 'Felipe Davids', email: 'felipe@teste.com' }))
+    const btn = w.find('.user-heading-btn')
+    expect(btn.exists()).toBe(true)
+    await btn.trigger('click')
+    await flushPromises()
+    const popup = document.querySelector('.user-popup-card')
+    expect(popup).not.toBeNull()
+    const text = norm(popup.textContent)
+    expect(text).toContain('Felipe Davids')
+    expect(text).toContain('felipe@teste.com')
+    expect(text).toContain('foto de perfil')
+    expect(text).toContain('Configurações')
     stopPolling()
   })
 })

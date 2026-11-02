@@ -22,7 +22,8 @@ from app.core.config import settings
 from app import models  # noqa: F401  (registra os modelos)
 from app.db.session import Base
 
-config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+migration_url = (settings.database_url_unpooled or settings.database_url).replace("%", "%%")
+config.set_main_option("sqlalchemy.url", migration_url)
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

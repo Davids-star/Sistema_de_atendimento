@@ -3,9 +3,9 @@
   --v-font-body: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --v-font-heading: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
-  --accent: #6f9c8f;
-  --ink: #1c252c;
-  --link: #3d6b5e;   /* verde-sálvia escuro: contraste bom sobre fundo claro */
+  --accent: #c88a58;
+  --ink: #6b1322;
+  --link: #6b1322;
 }
 
 body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiased; }
@@ -26,7 +26,6 @@ body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiase
 
 /* Cartões: borda fina no lugar de sombra pesada */
 .v-card { border-color: rgba(var(--v-border-color), 0.12) !important; }
-.v-theme--dark .v-card { border-color: rgba(255, 255, 255, 0.08) !important; }
 
 /* Texto dentro de alertas legível (o tonal puro deixa o laranja fraco sobre o pêssego) */
 .v-alert .v-alert__content { color: rgb(var(--v-theme-on-surface)); }
@@ -44,37 +43,35 @@ body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiase
 .v-btn-toggle .v-btn { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .v-btn { text-transform: none; letter-spacing: 0; font-weight: 500; }
 
-/* Campos: foco em latão no tema escuro já vem do primary; aqui só o respiro */
+/* Campos */
 .v-field { border-radius: 10px; }
 
 /* Rolagem e seleção de texto na cor da marca */
-::selection { background: rgba(111, 156, 143, 0.3); }
-.v-theme--dark { --link: #9fc3b8; }
+::selection { background: rgba(107, 19, 34, 0.16); }
 
-/* Barra lateral: sempre escura, nos dois temas */
-.sidebar.v-navigation-drawer { background: var(--ink) !important; border-right: none !important; }
-.v-theme--dark .sidebar.v-navigation-drawer { background: #0a0d12 !important; border-right: 1px solid rgba(255, 255, 255, 0.06) !important; }
+/* Barra lateral na paleta principal */
+.sidebar.v-navigation-drawer { background: rgb(var(--v-theme-primary)) !important; border-right: none !important; }
 .sidebar .brand { display: flex; align-items: center; gap: 12px; padding: 22px 20px 18px; }
 .sidebar .brand-mark {
   width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0;
-  background: linear-gradient(145deg, #9fc3b8, #6f9c8f); color: #10201b;
+  background: linear-gradient(145deg, #f3e6d8, #c88a58); color: #6b1322;
 }
-.sidebar .brand-name { font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; line-height: 1.1; color: #f3ece0; }
-.sidebar .brand-sub { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(243, 236, 224, 0.5); margin-top: 2px; }
+.sidebar .brand-name { font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; line-height: 1.1; color: #fff; }
+.sidebar .brand-sub { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255, 255, 255, 0.62); margin-top: 2px; }
 .sidebar .v-list { padding: 8px 12px; }
 .sidebar .v-list-item {
-  border-radius: 10px; margin-bottom: 4px; min-height: 44px; color: rgba(243, 236, 224, 0.72);
+  border-radius: 10px; margin-bottom: 4px; min-height: 44px; color: rgba(255, 255, 255, 0.78);
   transition: background 0.15s, color 0.15s;
 }
 .sidebar .v-list-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
-.sidebar .v-list-item--active { background: rgba(159, 195, 184, 0.14) !important; color: #bfe0d5 !important; }
+.sidebar .v-list-item--active { background: rgba(var(--v-theme-secondary), 0.22) !important; color: #fff !important; }
 .sidebar .v-list-item--active .v-list-item__overlay { opacity: 0; }
 .sidebar .v-list-item--active::before {
-  content: ''; position: absolute; left: -12px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: #9fc3b8;
+  content: ''; position: absolute; left: -12px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: rgb(var(--v-theme-secondary));
 }
 .sidebar .v-list-item-title { font-size: 0.92rem; font-weight: 500; }
 .sidebar .v-list-item .v-icon { opacity: 0.9; }
-.sidebar .sidebar-foot { padding: 14px 20px 18px; border-top: 1px solid rgba(255, 255, 255, 0.07); font-size: 0.75rem; color: rgba(243, 236, 224, 0.45); }
+.sidebar .sidebar-foot { padding: 14px 20px 18px; border-top: 1px solid rgba(255, 255, 255, 0.12); font-size: 0.75rem; color: rgba(255, 255, 255, 0.58); }
 
 /* Barra superior */
 .app-bar.v-app-toolbar, .app-bar.v-toolbar { background: transparent !important; }
@@ -97,4 +94,4 @@ body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiase
 
 /* Contador de pendências no menu lateral */
 .nav-badge { min-width: 22px; padding: 1px 7px; border-radius: 11px; font-size: 0.75rem; font-weight: 700; text-align: center;
-             background: #9fc3b8; color: #10201b; }
+             background: rgb(var(--v-theme-secondary)); color: rgb(var(--v-theme-on-secondary)); }

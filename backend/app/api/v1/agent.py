@@ -98,6 +98,28 @@ def list_services(db: Session = Depends(get_db)):
 
 
 # ----------------------------------------------------------------------
+# 1.1 Consultar Dias e Horários de Funcionamento do Estabelecimento
+# ----------------------------------------------------------------------
+@router.get("/business-hours", response_model=AgentResponse[list[dict]])
+@router.get("/horarios-funcionamento", response_model=AgentResponse[list[dict]], include_in_schema=False)
+def get_business_hours(db: Session = Depends(get_db)):
+    """Retorna os horários e dias de funcionamento oficiais do estabelecimento."""
+    from app.models.schedule import BusinessHours
+    days = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
+    b_hours = db.scalars(select(BusinessHours).order_by(BusinessHours.weekday, BusinessHours.start_time)).all()
+    data = [
+        {
+            "weekday": b.weekday,
+            "day_name": days[b.weekday],
+            "start_time": b.start_time.strftime("%H:%M"),
+            "end_time": b.end_time.strftime("%H:%M"),
+        }
+        for b in b_hours
+    ]
+    return AgentResponse.ok(data)
+
+
+# ----------------------------------------------------------------------
 # 2. Consultar Horários Disponíveis
 # ----------------------------------------------------------------------
 @router.get("/availability", response_model=AgentResponse[AgentAvailabilityItem])
@@ -170,6 +192,7 @@ def create_client(payload: AgentClientCreate, db: Session = Depends(get_db)):
 @router.post("/agendamentos", response_model=AgentResponse[AgentAppointmentItem], status_code=status.HTTP_201_CREATED, include_in_schema=False)
 def create_appointment(
     payload: AgentAppointmentCreate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """Cria um agendamento com validação estrita (strict=True) de disponibilidade em tempo real."""
@@ -189,6 +212,8 @@ def create_appointment(
         )
         db.commit()
         db.refresh(appt)
+        # Notifica o dono/chefe imediatamente (ex.: via Telegram) sobre o novo agendamento feito pelo WhatsApp
+        background.add_task(owner_notify.notify_owner_booking, appt.id, "WhatsApp")
     except AppointmentError as e:
         db.rollback()
         code = "HORARIO_INDISPONIVEL" if e.status_code == 409 else "DADOS_INVALIDOS"

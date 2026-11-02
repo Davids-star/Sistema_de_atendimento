@@ -11,3 +11,4 @@ logs/
 # Chaves do Firebase: nunca no Git
 *firebase-adminsdk*.json
 service-account*.json
+.neon
