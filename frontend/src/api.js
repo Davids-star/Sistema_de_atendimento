@@ -33,8 +33,14 @@ export function detailToMessage(detail, status) {
 
 export async function api(path, { method = 'GET', params, body } = {}) {
   // No navegador a API está no mesmo endereço (o Vite/servidor encaminha). No app Android não: defina VITE_API_URL
-  // (ex.: https://agenda.seudominio.com.br) ao gerar o app.
-  const url = new URL(`${import.meta.env.VITE_API_URL || ''}/api/v1${path}`, window.location.origin)
+  // (ex.: https://sistema-de-atendimento-s6oi.onrender.com) ao gerar o app ou na Vercel.
+  let baseUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
+  if (baseUrl.endsWith('/api/v1')) {
+    baseUrl = baseUrl.slice(0, -'/api/v1'.length)
+  }
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  const fullPath = `${baseUrl}/api/v1${cleanPath}`
+  const url = new URL(fullPath, window.location.origin)
   for (const [k, v] of Object.entries(params ?? {})) {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v)
   }
