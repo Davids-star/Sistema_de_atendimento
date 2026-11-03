@@ -9,11 +9,12 @@ node_modules/
 dist/
 .vscode/
 logs/
-
-# Chaves do Firebase e segredos: nunca no Git
+.gitignore
+# Chaves do Firebase: nunca no Git
 *firebase-adminsdk*.json
 service-account*.json
 .neon
 .agents/
 skills-lock.json
 *.db
+frontend/android/
