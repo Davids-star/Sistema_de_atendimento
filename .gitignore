@@ -10,6 +10,8 @@ dist/
 .vscode/
 logs/
 .gitignore
+
+=
 # Chaves do Firebase: nunca no Git
 *firebase-adminsdk*.json
 service-account*.json
@@ -18,3 +20,8 @@ service-account*.json
 skills-lock.json
 *.db
 frontend/android/
+#outros
+.neon.ts
+pytest.ini
+package-lock.json
+skills-lock.json
