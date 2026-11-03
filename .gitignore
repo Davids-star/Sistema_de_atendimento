@@ -2,13 +2,18 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.example
 .pytest_cache/
 node_modules/
 dist/
 .vscode/
 logs/
 
-# Chaves do Firebase: nunca no Git
+# Chaves do Firebase e segredos: nunca no Git
 *firebase-adminsdk*.json
 service-account*.json
 .neon
+.agents/
+skills-lock.json
+*.db
