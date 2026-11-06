@@ -21,7 +21,7 @@ services:
       - key: CORS_ORIGINS
         value: "http://localhost:5173,https://localhost,capacitor://localhost"
       - key: WHATSAPP_AGENT_API_KEY
-        value: "m2m_agent_agendamento_secret_token_2026"
+        sync: false   # defina no painel do Render, nunca aqui
       - key: MAIL_MODE
         value: "off"
 

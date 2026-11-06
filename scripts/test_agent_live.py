@@ -9,12 +9,13 @@ Testa o fluxo completo de ponta a ponta na API em execução:
 6. Tentativa de cancelamento por outro número (espera 403)
 7. Cancelamento válido pelo próprio cliente (espera 200)
 """
+import os
 import sys
 import httpx
 from datetime import datetime, timedelta
 
 BASE_URL = "http://localhost:8000/api/v1/agent"
-API_KEY = "m2m_agent_agendamento_secret_token_2026"
+API_KEY = os.environ.get("WHATSAPP_AGENT_API_KEY") or sys.exit("Defina WHATSAPP_AGENT_API_KEY no ambiente.")
 HEADERS = {"X-Agent-API-Key": API_KEY, "Content-Type": "application/json"}
 
 
